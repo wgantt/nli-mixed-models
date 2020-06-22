@@ -1,0 +1,14 @@
+{
+  "ckpt_path": [null],
+  "hyper": {
+    "embedding_dim": [768],
+    "n_predictor_layers": [2],
+    "use_random_slopes": [false]
+  },
+  "training": {
+    "n_epochs": [25], 
+    "lr": [0.01], 
+    "verbosity": [10], 
+    "batch_size": [128]
+  }
+}

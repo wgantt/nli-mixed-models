@@ -9,7 +9,12 @@ VERIDICALITY_URL = URL_PREFIX + 'mega-veridicality/mega-veridicality-v2/mega-ver
 NEG_RAISING_URL = URL_PREFIX + 'mega-negraising/mega-negraising-v1/mega-negraising-v1.tsv'
 ACCEPTABILITY_URL = URL_PREFIX + 'mega-acceptability/mega-acceptability-v2/mega-acceptability-v2.tsv'
 
-# TODO: Add functions for saving models
+"""
+TODO: Add functions for saving models
+
+Also: It would be faster to load the data from the data/ directory
+      instead of pulling it off the web, so we should probably fix that.
+"""
 
 def parameter_grid(param_dict):
 	ks = list(param_dict.keys())
@@ -184,7 +189,7 @@ def load_acceptability():
 		return ' '.join([c.replace('.', '') for t in tokens[idx] for c in t.split('_')])
 	
 	# Read the TSV
-	acc = pd.read_csv(acc_url, sep='\t')
+	acc = pd.read_csv(ACCEPTABILITY_URL, sep='\t')
 
 	# For each verb + sentence, identify the position of the verb within the
 	# sentence, as well as the actual form of the verb used in the sentence

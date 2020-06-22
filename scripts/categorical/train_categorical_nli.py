@@ -11,25 +11,37 @@ LOG = setup_logging()
 
 def main(args):
 
+    # Load parameters from the supplied parameters file
     with open(args.parameters) as f:
         params = json.load(f)
 
-    print(parameter_grid(params['hyper']))
-    # LOG.info('Loading MegaVeridicality Data...')
-    # ver = load_veridicality()
-    # LOG.info('...Complete.')
+    for hyperparams in parameter_grid(params["hyper"]):
+        for trainparams in parameter_grid(params["training"]):
 
-    # LOG.info('Initializing Categorical NLI model...')
-    # n_participants = ver.participant.unique().shape[0]
-    # cnli_trainer = CategoricalNaturalLanguageInferenceTrainer(n_participants=n_participants, use_random_slopes)
-    # LOG.info('...Complete')
+            # Load MegaVeridicality data
+            LOG.info('Loading MegaVeridicality data...')
+            ver = load_veridicality()
+            hyperparams['n_participants'] = ver.participant.unique().shape[0]
+            LOG.info('...Complete.')
+
+            # Initialize the model
+            LOG.info('Initializing categorical NLI model with the following hyperparameters:')
+            LOG.info(json.dumps(hyperparams, indent=4))
+            cnli_trainer = CategoricalNaturalLanguageInferenceTrainer(**hyperparams)
+            LOG.info('...Complete')
+
+            # Run the model
+            LOG.info('Beginning training...')
+            cat_model = cnli_trainer.fit(data=ver[ver.verb.isin(['know', 'think'])], **trainparams)
+            LOG.info('Finished training.')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train a categorical NLI mixed effects model')
     parser.add_argument('--parameters',
                         type=str,
-                        default='train_categorical_nli.json',
+                        default='scripts/categorical/train_categorical_nli.json',
                         help='Path to a JSON containing parameters to sweep')
+    # Currently will have no effect
     parser.add_argument('--checkpoints',
                         type=str,
                         default='checkpoints/',

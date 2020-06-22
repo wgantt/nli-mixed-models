@@ -5,6 +5,7 @@ from typing import Tuple
 from torch.nn import Module, ModuleList, Linear, ReLU, Sequential, Dropout
 from torch.distributions.multivariate_normal import MultivariateNormal
 from fairseq.data.data_utils import collate_tokens
+print(torch)
 
 class NaturalLanguageInference(Module):
     
@@ -107,12 +108,12 @@ class NaturalLanguageInference(Module):
     def embed(self, items: pd.DataFrame) -> torch.Tensor:
         texts, hypotheses = items.sentence.values, items.hypothesis.values
                 
-        token_ids = collate_tokens([roberta.encode(t, h) 
+        token_ids = collate_tokens([self.roberta.encode(t, h) 
                                     for t, h in zip(texts, hypotheses)], 
                                    pad_idx=1)
 
         with torch.no_grad():
-            embedding = roberta.extract_features(token_ids)
+            embedding = self.roberta.extract_features(token_ids)
             
         return embedding
 

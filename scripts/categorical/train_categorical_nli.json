@@ -1,10 +1,9 @@
 {
-  "ckpt_path": null,
+  "ckpt_path": [null],
   "hyper": {
     "embedding_dim": [768],
     "n_predictor_layers": [2],
-    "output_dim": [3],
-    "use_random_slopes": [false],
+    "use_random_slopes": [false]
   },
   "training": {
     "n_epochs": [25], 
