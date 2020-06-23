@@ -11,7 +11,7 @@ class NaturalLanguageInference(Module):
     
     def __init__(self, embedding_dim: int, n_predictor_layers: int,  
                  output_dim: int, n_participants: int,
-                 use_random_slopes=False, device=torch.device('cpu')):
+                 use_random_slopes=False, tied_covariance=False, device=torch.device('cpu')):
         super().__init__()
         
         self.roberta = torch.hub.load('pytorch/fairseq', 'roberta.base')
@@ -20,6 +20,7 @@ class NaturalLanguageInference(Module):
         self.n_predictor_layers = n_predictor_layers
         self.output_dim = output_dim
         self.n_participants = n_participants
+        self.tied_covariance = tied_covariance
         self.use_random_slopes = use_random_slopes
         self.device = device
         
@@ -143,21 +144,18 @@ class CategoricalNaturalLanguageInference(NaturalLanguageInference):
     
     def _random_loss(self, random):
         # TODO: Handle random slopes for tied covariance? May not be worth it.
-        return torch.mean(torch.square(random/random.std(0)[None,:]))
-
-class CategoricalNaturalLanguageInferenceUntiedCovariance(CategoricalNaturalLanguageInference):
-    
-    def _random_loss(self, random):
-        # Random slopes + random intercepts: may have non-zero mean
-        if self.use_random_slopes:
-            mean = random.mean(0)
-            # This is currently incorrect
-            cov = torch.matmul(torch.transpose(random, 1, 0), random) / (self.n_participants - 1)
-        # Random intercepts only: mean is zero
+        if self.tied_covariance:
+            return torch.mean(torch.square(random/random.std(0)[None,:]))
         else:
-            mean = torch.zeros(self.n_participants, self.output_dim)
-            cov = torch.matmul(torch.transpose(random, 1, 0), random) / (self.n_participants - 1)
-        return torch.mean(MultivariateNormal(mean, cov).log_prob(random)[None,:])
+            if self.use_random_slopes:
+                mean = random.mean(0)
+                # This is currently incorrect
+                cov = torch.matmul(torch.transpose(random, 1, 0), random) / (self.n_participants - 1)
+            # Random intercepts only: mean is zero
+            else:
+                mean = torch.zeros(self.n_participants, self.output_dim)
+                cov = torch.matmul(torch.transpose(random, 1, 0), random) / (self.n_participants - 1)
+            return torch.mean(MultivariateNormal(mean, cov).log_prob(random)[None,:])
 
 class UnitNaturalLanguageInference(NaturalLanguageInference):
     

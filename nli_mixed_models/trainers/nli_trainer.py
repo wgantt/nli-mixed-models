@@ -6,8 +6,7 @@ from torch.optim import Adam
 from torch.nn import CrossEntropyLoss, BCEWithLogitsLoss
 from ..modules.nli import (
     UnitNaturalLanguageInference,
-    CategoricalNaturalLanguageInference,
-    CategoricalNaturalLanguageInferenceUntiedCovariance
+    CategoricalNaturalLanguageInference
 )
 
 class NaturalLanguageInferenceTrainer:
@@ -15,17 +14,20 @@ class NaturalLanguageInferenceTrainer:
     def __init__(self, n_participants: int, 
                  embedding_dim: int = 768, 
                  n_predictor_layers: int = 2,
+                 tied_covariance: bool = False,
                  use_random_slopes: bool = False,
                  device=torch.device('cpu')):
         self.embedding_dim = embedding_dim
         self.n_predictor_layers = n_predictor_layers
         self.n_participants = n_participants
         self.device = device
+        self.tied_covariance = tied_covariance
         self.use_random_slopes = use_random_slopes,
         self.nli = self.MODEL_CLASS(embedding_dim, 
                                     n_predictor_layers,
                                     self.OUTPUT_DIM, 
                                     n_participants,
+                                    tied_covariance,
                                     use_random_slopes,
                                     device)
     
@@ -72,13 +74,6 @@ class NaturalLanguageInferenceTrainer:
                     
                     acc_trace.append(acc)
                     best_trace.append(acc/best)
-                
-                elif self.MODEL_CLASS is CategoricalNaturalLanguageInferenceUntiedCovariance:
-                    acc = (prediction.argmax(1) == target).data.cpu().numpy().mean()
-                    best = (items.modal_response==items.target).mean()
-                    
-                    acc_trace.append(acc)
-                    best_trace.append(acc/best)
                     
                 elif self.MODEL_CLASS is UnitNaturalLanguageInference:
                     acc = loss_trace[-1]
@@ -115,12 +110,6 @@ class UnitNaturalLanguageInferenceTrainer(NaturalLanguageInferenceTrainer):
 
 class CategoricalNaturalLanguageInferenceTrainer(NaturalLanguageInferenceTrainer):
     MODEL_CLASS = CategoricalNaturalLanguageInference
-    LOSS_CLASS = CrossEntropyLoss
-    TARGET_TYPE = torch.LongTensor
-    OUTPUT_DIM = 3
-
-class CategoricalNaturalLanguageInferenceUntiedCovarianceTrainer(NaturalLanguageInferenceTrainer):
-    MODEL_CLASS = CategoricalNaturalLanguageInferenceUntiedCovariance
     LOSS_CLASS = CrossEntropyLoss
     TARGET_TYPE = torch.LongTensor
     OUTPUT_DIM = 3

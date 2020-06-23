@@ -4,5 +4,6 @@
 *.log
 *.pyc
 *.egg-info
+*.icloud
 build/
 dist/
