@@ -2,6 +2,7 @@ import logging, time, sys, os
 
 def setup_logging():
     handlers = [logging.StreamHandler(sys.stdout)]
+    logpath = None
     if hasattr(sys.modules['__main__'], '__file__'):
         mainpath = os.path.abspath(sys.modules['__main__'].__file__)
         maindir = os.path.dirname(mainpath)
