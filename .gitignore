@@ -1,5 +1,7 @@
 *.swp
 *__pycache__
+**/__pycache__
+**/__pycache__/*
 *.ipynb_checkpoints
 *.log
 *.pyc
@@ -7,3 +9,4 @@
 *.icloud
 build/
 dist/
+env/
