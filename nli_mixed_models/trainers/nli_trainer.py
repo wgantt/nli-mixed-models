@@ -65,6 +65,7 @@ class NaturalLanguageInferenceTrainer:
                 fixed_loss = lossfunc(prediction, target)
                 
                 loss = fixed_loss + random_loss
+                print(random_loss)
                 
                 loss_trace.append(loss.item()-random_loss.item())
                 

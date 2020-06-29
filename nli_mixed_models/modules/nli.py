@@ -2,16 +2,16 @@ import torch
 import pandas as pd
 
 from typing import Tuple
+from torch import cat, flatten
 from torch.nn import Module, ModuleList, Linear, ReLU, Sequential, Dropout
 from torch.distributions.multivariate_normal import MultivariateNormal
 from fairseq.data.data_utils import collate_tokens
-print(torch)
 
 class NaturalLanguageInference(Module):
     
     def __init__(self, embedding_dim: int, n_predictor_layers: int,  
                  output_dim: int, n_participants: int,
-                 tied_covariance=True, use_random_slopes=False, device=torch.device('cpu')):
+                 tied_covariance=False, use_random_slopes=False, device=torch.device('cpu')):
         super().__init__()
         
         self.roberta = torch.hub.load('pytorch/fairseq', 'roberta.base')
@@ -24,13 +24,13 @@ class NaturalLanguageInference(Module):
         self.use_random_slopes = use_random_slopes
         self.device = device
         
-        self._initialize_random_effects()
-        
         # TODO: comment
         if self.use_random_slopes:
             self.predictor = self._initialize_predictor_for_random_slopes(self.n_participants)
         else:
             self.predictor = self._initialize_predictor()
+
+        self._initialize_random_effects()
      
     def _initialize_predictor(self):
         seq = []
@@ -76,7 +76,24 @@ class NaturalLanguageInference(Module):
             heads.append(Sequential(*seq))
             
         return ModuleList(heads)
-        
+
+    def _extract_random_slopes_params(self):
+        # Iterate over annotator MLPs
+        random_effects = []
+        for i in range(self.n_participants):
+            flattened = None
+            for layer in self.predictor[i]:
+                # Collect all weights and biases from the MLP and flatten them
+                if isinstance(layer, Linear):
+                    if flattened == None:
+                        flattened = flatten(cat([layer.weight, layer.bias.unsqueeze(1)], dim=1))
+                    else:
+                        flattened = cat([flattened, flatten(cat([layer.weight, layer.bias.unsqueeze(1)], dim=1))])
+            random_effects.append(flattened)
+
+        # Return (n_participants, flattened_mlp_dim)-shaped tensor
+        return torch.stack(random_effects)
+
     def forward(self, embeddings, participant=None) -> Tuple[torch.Tensor, torch.Tensor]:
         # Random slopes
         if self.use_random_slopes:
@@ -84,9 +101,17 @@ class NaturalLanguageInference(Module):
             # n_participants MLPs, one for each participant. Couldn't figure out
             # a way to vectorize this, unfortunately.
             fixed = torch.stack([self.predictor[p](e.mean(0)) for p, e in zip(participant, embeddings)], dim=0)
-            random_loss = self._random_loss(self._random_effects(participant))
+
+            # The annotator MLPs contain the random slopes and intercepts, which are
+            # used to generate the predictions above. So no separate term here to use
+            # in the link function.
+            random = None
+
+            # There is, however, still a random loss, which is just the prior over
+            # the (flattened) weights and biases of the MLPs.
+            random_loss = self._random_loss(self._random_effects())
             
-        # Random intercepts
+        # Standard setting + random intercepts
         else:
             # In the random intercepts setting, we have a single MLP
             # for all annotators.
@@ -99,7 +124,7 @@ class NaturalLanguageInference(Module):
                 random_loss = 0.
             # The "extended" setting, where we have annotator random effects
             else:
-                random = self._random_effects(participant)
+                random = self._random_effects()
                 random_loss = self._random_loss(random)
         
         prediction = self._link_function(fixed, random, participant)
@@ -121,39 +146,60 @@ class NaturalLanguageInference(Module):
 class CategoricalNaturalLanguageInference(NaturalLanguageInference):
     
     def _initialize_random_effects(self):
-        self.random_effects = torch.randn(self.n_participants, self.output_dim)
+        # For random slopes, the random slope and intercept terms are
+        # just the weights and biases of the MLPs.
+        if self.use_random_slopes:
+            # shape = n_participants x len(flattened MLP weights + biases)
+            self.random_effects = self._extract_random_slopes_params()
+            self.random_effects.requires_grad = True
+        # For random intercepts, the intercepts terms are generated
+        # separately from a standard normal
+        else:
+            self.random_effects = torch.randn(self.n_participants, self.output_dim, requires_grad=True)
     
-    def _random_effects(self, participant):
+    def _random_effects(self):
+        # Even in the random slopes case, I don't think it matters
+        # whether we mean subtract or not here, since this is just used
+        # to compute loss (and not to actually scale the fixed term, as
+        # in UNLI).
         return self.random_effects - self.random_effects.mean(0)[None,:]
     
     def _link_function(self, fixed, random, participant):
-        # Standard setting (random intercepts or random slopes)
-        if random is None:
+        # Standard setting + random slopes. In random slopes, 'fixed' contains
+        # the outputs from the individual annotator MLPs, which have the random
+        # slopes and intercepts embedeed within them, so there's no separate
+        # random component.
+        if random is None or self.use_random_slopes:
             return fixed
-        # Extending setting
+        # Extended setting
         else:
             return fixed + random[participant]
     
     def _random_loss(self, random):
+        # TODO: decide whether to compute loss over all annotators at each iteration,
+        # or only over a subset. Currently random loss is computed over ALL annotators
+        # at each iteration. TBD whether this makes a difference or not. Regardless,
+        # the covariance should always be estimated from all annotators.
         if self.tied_covariance:
             return torch.mean(torch.square(random/random.std(0)[None,:]))
         else:
-            if self.use_random_slopes:
-                mean = random.mean(0)
-                cov = torch.matmul(torch.transpose(random, 1, 0), random) / (self.n_participants - 1)
-            # Random intercepts only: mean is zero
-            else:
-                mean = torch.zeros(self.n_participants, self.output_dim)
-                cov = torch.matmul(torch.transpose(random, 1, 0), random) / (self.n_participants - 1)
-            return torch.mean(MultivariateNormal(mean, cov).log_prob(random)[None,:])
+            # The way things are currently implemented, the mean of 'random'
+            # will be zero in both the random intercepts and random slopes
+            # cases, since we subtract off the true mean before calling this method.
+            mean = torch.zeros(self.n_participants, self.output_dim)
+            cov = torch.matmul(torch.transpose(random, 1, 0), random) / (self.n_participants - 1)
+            return -torch.mean(MultivariateNormal(mean, cov).log_prob(random)[None,:])
 
 class UnitNaturalLanguageInference(NaturalLanguageInference):
     
-    # TODO: Convert to using beta distribution
+    # TODO: Ben Kane - Convert to using beta distribution
     def _initialize_random_effects(self):
-        self.random_effects = torch.randn(self.n_participants, 2)
+        if self.use_random_slopes:
+            self.random_effects = self._extract_random_slopes_params()
+        else:
+            self.random_effects = torch.randn(self.n_participants, 2)
         
-    def _random_effects(self, participant):
+    def _random_effects(self):
         random_scale = torch.square(self.random_effects[:,0])
         random_shift = self.random_effects[:,1] - self.random_effects[:,1].mean(0)
         
