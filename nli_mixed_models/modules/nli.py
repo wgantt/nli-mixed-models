@@ -11,7 +11,7 @@ class NaturalLanguageInference(Module):
     
     def __init__(self, embedding_dim: int, n_predictor_layers: int,  
                  output_dim: int, n_participants: int,
-                 use_random_slopes=False, tied_covariance=False, device=torch.device('cpu')):
+                 tied_covariance=True, use_random_slopes=False, device=torch.device('cpu')):
         super().__init__()
         
         self.roberta = torch.hub.load('pytorch/fairseq', 'roberta.base')
@@ -78,26 +78,26 @@ class NaturalLanguageInference(Module):
         return ModuleList(heads)
         
     def forward(self, embeddings, participant=None) -> Tuple[torch.Tensor, torch.Tensor]:
+        # Random slopes
         if self.use_random_slopes:
-            # Not sure this is right, but given that the *entire* prediction head
-            # is random, I don't know what would count as the fixed component.
-            # Maybe just the embedding?
-            fixed = None
-            
             # In the random slopes setting, 'predictor' is actually a Tensor of 
             # n_participants MLPs, one for each participant. Couldn't figure out
-            # a way to vectorize this, unfortunately. This should probably go in
-            # the _random_effects method of a CategoricalNaturalLanguageInferenceRandomSlopes
-            # class.
-            random = torch.stack([self.predictor[p](e.mean(0)) for p, e in zip(participant, embeddings)], dim=0)
+            # a way to vectorize this, unfortunately.
+            fixed = torch.stack([self.predictor[p](e.mean(0)) for p, e in zip(participant, embeddings)], dim=0)
             random_loss = self._random_loss(self._random_effects(participant))
             
+        # Random intercepts
         else:
+            # In the random intercepts setting, we have a single MLP
+            # for all annotators.
             fixed = self.predictor(embeddings.mean(1))
         
+            # The "standard" setting, where we do not have access to annotator
+            # information and thus do not have random effects.
             if participant is None:
                 random = None
                 random_loss = 0.
+            # The "extended" setting, where we have annotator random effects
             else:
                 random = self._random_effects(participant)
                 random_loss = self._random_loss(random)
@@ -123,33 +123,23 @@ class CategoricalNaturalLanguageInference(NaturalLanguageInference):
     def _initialize_random_effects(self):
         self.random_effects = torch.randn(self.n_participants, self.output_dim)
     
-    # Not sure why "participant" is a parameter here
     def _random_effects(self, participant):
-        # No mean subtraction for random slopes
-        if self.use_random_slopes:
-            return self.random_effects
-        else:
-            return self.random_effects - self.random_effects.mean(0)[None,:]
+        return self.random_effects - self.random_effects.mean(0)[None,:]
     
     def _link_function(self, fixed, random, participant):
-        # Random slopes + random intercepts case
-        if fixed is None:
-            return random
-        # Fixed effects (standard setting)
-        elif random is None:
+        # Standard setting (random intercepts or random slopes)
+        if random is None:
             return fixed
-        # Random intercepts alone (extended setting)
+        # Extending setting
         else:
             return fixed + random[participant]
     
     def _random_loss(self, random):
-        # TODO: Handle random slopes for tied covariance? May not be worth it.
         if self.tied_covariance:
             return torch.mean(torch.square(random/random.std(0)[None,:]))
         else:
             if self.use_random_slopes:
                 mean = random.mean(0)
-                # This is currently incorrect
                 cov = torch.matmul(torch.transpose(random, 1, 0), random) / (self.n_participants - 1)
             # Random intercepts only: mean is zero
             else:
