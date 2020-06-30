@@ -32,7 +32,10 @@ class NaturalLanguageInference(Module):
 
         self._initialize_random_effects()
      
+
     def _initialize_predictor(self):
+        """Creates an MLP predictor with n predictor layers, ReLU activation,
+           and a 0.5 dropout layer."""
         seq = []
         
         prev_size = self.embedding_dim
@@ -52,9 +55,11 @@ class NaturalLanguageInference(Module):
         
         return Sequential(*seq)
 
+
     def _initialize_predictor_for_random_slopes(self, n_participants):
-        # Separate MLP for each annotator. We assume the annotator IDs
-        # are zero-indexed and range up to n_participants.
+        """Creates a seperate MLP predictor for each annotator (assuming annotator
+           IDs are zero-indexed and range up to n_participants). Uses ReLU activation
+           and a 0.5 dropout layer."""
         heads = []
         for _ in range(n_participants):
             seq = []
@@ -77,7 +82,10 @@ class NaturalLanguageInference(Module):
             
         return ModuleList(heads)
 
+
     def _extract_random_slopes_params(self):
+        """Assuming a random slopes model, extract and flatten the parameters of the
+           linear layers in each participant MLP."""
         # Iterate over annotator MLPs
         random_effects = []
         for i in range(self.n_participants):
@@ -94,7 +102,10 @@ class NaturalLanguageInference(Module):
         # Return (n_participants, flattened_mlp_dim)-shaped tensor
         return torch.stack(random_effects)
 
+
     def forward(self, embeddings, participant=None) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Do a forward pass on the model. Returns a tuple (prediction, random_loss), where
+           random_loss is a loss associated with the prior over the random components."""
         # Random slopes
         if self.use_random_slopes:
             # In the random slopes setting, 'predictor' is actually a Tensor of 
@@ -131,7 +142,9 @@ class NaturalLanguageInference(Module):
         
         return prediction, random_loss
 
+
     def embed(self, items: pd.DataFrame) -> torch.Tensor:
+        """Creates text+hypothesis embeddings for each item using RoBERTa."""
         texts, hypotheses = items.sentence.values, items.hypothesis.values
                 
         token_ids = collate_tokens([self.roberta.encode(t, h) 
@@ -143,28 +156,35 @@ class NaturalLanguageInference(Module):
             
         return embedding
 
+
+
 class CategoricalNaturalLanguageInference(NaturalLanguageInference):
     
     def _initialize_random_effects(self):
+        """Initializes random effects - random intercept terms in the case of the random intercepts
+           model, and the MLP parameters in the case of random slopes."""
         # For random slopes, the random slope and intercept terms are
         # just the weights and biases of the MLPs.
         if self.use_random_slopes:
             # shape = n_participants x len(flattened MLP weights + biases)
             self.random_effects = self._extract_random_slopes_params()
-            self.random_effects.requires_grad = True
         # For random intercepts, the intercepts terms are generated
         # separately from a standard normal
         else:
             self.random_effects = torch.randn(self.n_participants, self.output_dim, requires_grad=True)
     
+
     def _random_effects(self):
+        """Returns the mean-subtracted random effects of the model."""
         # Even in the random slopes case, I don't think it matters
         # whether we mean subtract or not here, since this is just used
         # to compute loss (and not to actually scale the fixed term, as
         # in UNLI).
         return self.random_effects - self.random_effects.mean(0)[None,:]
     
+
     def _link_function(self, fixed, random, participant):
+        """Computes the link function for a given model configuration."""
         # Standard setting + random slopes. In random slopes, 'fixed' contains
         # the outputs from the individual annotator MLPs, which have the random
         # slopes and intercepts embedeed within them, so there's no separate
@@ -175,7 +195,9 @@ class CategoricalNaturalLanguageInference(NaturalLanguageInference):
         else:
             return fixed + random[participant]
     
+
     def _random_loss(self, random):
+        """Compute loss over random effect priors."""
         # TODO: decide whether to compute loss over all annotators at each iteration,
         # or only over a subset. Currently random loss is computed over ALL annotators
         # at each iteration. TBD whether this makes a difference or not. Regardless,
@@ -187,8 +209,16 @@ class CategoricalNaturalLanguageInference(NaturalLanguageInference):
             # will be zero in both the random intercepts and random slopes
             # cases, since we subtract off the true mean before calling this method.
             mean = torch.zeros(self.n_participants, self.output_dim)
+            print('BEFORE FREEZE')
+            test = torch.transpose(random, 1, 0)
+            print('transp:\n > shape: %s\n > value: %s' % (test.shape, test))
+            print('\nrandom:\n > shape: %s\n > value: %s' % (random.shape, random))
+            print('Seems to freeze here: %s' % torch.matmul(test, random))
             cov = torch.matmul(torch.transpose(random, 1, 0), random) / (self.n_participants - 1)
+            print('AFTER FREEZE')
             return -torch.mean(MultivariateNormal(mean, cov).log_prob(random)[None,:])
+
+
 
 class UnitNaturalLanguageInference(NaturalLanguageInference):
     
@@ -199,12 +229,14 @@ class UnitNaturalLanguageInference(NaturalLanguageInference):
         else:
             self.random_effects = torch.randn(self.n_participants, 2)
         
+
     def _random_effects(self):
         random_scale = torch.square(self.random_effects[:,0])
         random_shift = self.random_effects[:,1] - self.random_effects[:,1].mean(0)
         
         return random_scale, random_shift
     
+
     def _link_function(self, fixed, random, participant):
         if random is None:
             return torch.square(self.random_effects[:,0]).mean()*fixed.squeeze(1)
@@ -213,6 +245,7 @@ class UnitNaturalLanguageInference(NaturalLanguageInference):
             return (random_scale[participant][:,None]*fixed +\
                     random_shift[participant][:,None]).squeeze(1)
     
+
     def _random_loss(self, random):
         random_scale, random_shift = random
         

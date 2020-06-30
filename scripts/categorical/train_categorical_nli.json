@@ -4,7 +4,7 @@
     "embedding_dim": [768],
     "n_predictor_layers": [2],
     "tied_covariance": [false],
-    "use_random_slopes": [false]
+    "use_random_slopes": [true]
   },
   "training": {
     "n_epochs": [25], 
