@@ -26,7 +26,7 @@ class NaturalLanguageInference(Module):
         
         # TODO: comment
         if self.use_random_slopes:
-            self.predictor = self._initialize_predictor_for_random_slopes(self.n_participants)
+            self.predictor_base, self.predictor_heads = self._initialize_predictor_for_random_slopes(self.n_participants)
         else:
             self.predictor = self._initialize_predictor()
 
@@ -57,49 +57,43 @@ class NaturalLanguageInference(Module):
 
 
     def _initialize_predictor_for_random_slopes(self, n_participants):
-        """Creates a seperate MLP predictor for each annotator (assuming annotator
-           IDs are zero-indexed and range up to n_participants). Uses ReLU activation
-           and a 0.5 dropout layer."""
-        heads = []
-        for _ in range(n_participants):
-            seq = []
-            prev_size = self.embedding_dim
+        """Creates a seperate MLP predictor that has annotator-specific
+           final layers. Uses ReLU activation and a 0.5 dropout layer."""
+        seq = []
+        prev_size = self.embedding_dim
         
-            for l in range(self.n_predictor_layers):
-                curr_size = int(prev_size/2)
-
-                seq += [Linear(prev_size,
-                               curr_size),
-                        ReLU(),
-                        Dropout(0.5)]
-
-                prev_size = curr_size
-
+        # Weights are shared for all but the last linear layer
+        for l in range(self.n_predictor_layers):
+            curr_size = int(prev_size/2)
+                
             seq += [Linear(prev_size,
-                           self.output_dim)]
-            
-            heads.append(Sequential(*seq))
-            
-        return ModuleList(heads)
+                           curr_size),
+                    ReLU(),
+                    Dropout(0.5)]
+
+            prev_size = curr_size
+
+        # Shared base
+        predictor_base = Sequential(*seq)
+        
+        # Annotator-specific final layers
+        predictor_heads = ModuleList([Linear(prev_size,
+                       self.output_dim) for _ in range(n_participants)])
+
+        return predictor_base, predictor_heads
 
 
     def _extract_random_slopes_params(self):
-        """Assuming a random slopes model, extract and flatten the parameters of the
-           linear layers in each participant MLP."""
-        # Iterate over annotator MLPs
+        """Assuming a random slopes model, extract and flatten the parameters
+           the final linear layers in each participant MLP."""
+        # Iterate over annotator-specific heads
         random_effects = []
         for i in range(self.n_participants):
-            flattened = None
-            for layer in self.predictor[i]:
-                # Collect all weights and biases from the MLP and flatten them
-                if isinstance(layer, Linear):
-                    if flattened == None:
-                        flattened = flatten(cat([layer.weight, layer.bias.unsqueeze(1)], dim=1))
-                    else:
-                        flattened = cat([flattened, flatten(cat([layer.weight, layer.bias.unsqueeze(1)], dim=1))])
+            weight, bias = self.predictor_heads[i].weight, self.predictor_heads[i].bias.unsqueeze(1)
+            flattened = flatten(cat([weight, bias], dim=1))
             random_effects.append(flattened)
 
-        # Return (n_participants, flattened_mlp_dim)-shaped tensor
+        # Return (n_participants, flattened_head_dim)-shaped tensor
         return torch.stack(random_effects)
 
 
@@ -108,10 +102,14 @@ class NaturalLanguageInference(Module):
            random_loss is a loss associated with the prior over the random components."""
         # Random slopes
         if self.use_random_slopes:
-            # In the random slopes setting, 'predictor' is actually a Tensor of 
-            # n_participants MLPs, one for each participant. Couldn't figure out
-            # a way to vectorize this, unfortunately.
-            fixed = torch.stack([self.predictor[p](e.mean(0)) for p, e in zip(participant, embeddings)], dim=0)
+            # In the random slopes setting, we have a shared base MLP
+            # with annotator-specific final linear layers. Not sure whether
+            # there's a clever way to vectorize this.
+            predictions = []
+            for p, e in zip(participant, embeddings):
+                predictions.append(self.predictor_heads[p](self.predictor_base(e.mean(0))))
+
+            fixed = torch.stack(predictions, dim=0)
 
             # The annotator MLPs contain the random slopes and intercepts, which are
             # used to generate the predictions above. So no separate term here to use
@@ -205,17 +203,16 @@ class CategoricalNaturalLanguageInference(NaturalLanguageInference):
         if self.tied_covariance:
             return torch.mean(torch.square(random/random.std(0)[None,:]))
         else:
-            # The way things are currently implemented, the mean of 'random'
-            # will be zero in both the random intercepts and random slopes
-            # cases, since we subtract off the true mean before calling this method.
-            mean = torch.zeros(self.n_participants, self.output_dim)
-            print('BEFORE FREEZE')
-            test = torch.transpose(random, 1, 0)
-            print('transp:\n > shape: %s\n > value: %s' % (test.shape, test))
-            print('\nrandom:\n > shape: %s\n > value: %s' % (random.shape, random))
-            print('Seems to freeze here: %s' % torch.matmul(test, random))
+            # For random slopes, the mean is the same dimension as the
+            # flattened, concatenated weight + bias of the final linear layer
+            # of the MLP
+            if self.use_random_slopes:
+                mean = torch.zeros(random.shape[1])
+            # For random intercepts, the mean is the same as the output dimension
+            # (one bias term per category)
+            else:
+                mean = torch.zeros(self.output_dim)
             cov = torch.matmul(torch.transpose(random, 1, 0), random) / (self.n_participants - 1)
-            print('AFTER FREEZE')
             return -torch.mean(MultivariateNormal(mean, cov).log_prob(random)[None,:])
 
 
