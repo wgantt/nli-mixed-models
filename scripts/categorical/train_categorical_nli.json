@@ -2,7 +2,7 @@
   "ckpt_path": [null],
   "hyper": {
     "embedding_dim": [768],
-    "n_predictor_layers": [2],
+    "n_predictor_layers": [1],
     "tied_covariance": [false],
     "use_random_slopes": [true]
   },

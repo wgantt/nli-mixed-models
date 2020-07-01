@@ -35,7 +35,11 @@ class NaturalLanguageInference(Module):
 
     def _initialize_predictor(self, reduction_factor=2):
         """Creates an MLP predictor with n predictor layers, ReLU activation,
-           and a 0.5 dropout layer."""
+           and a 0.5 dropout layer.
+
+           TODO: come up with a better name than 'reduction_factor', make it
+           a model parameter.
+        """
         seq = []
         
         prev_size = self.embedding_dim
@@ -222,25 +226,33 @@ class UnitNaturalLanguageInference(NaturalLanguageInference):
         
 
     def _random_effects(self):
-        random_scale = torch.square(self.random_effects[:,0])
-        random_shift = self.random_effects[:,1] - self.random_effects[:,1].mean(0)
-        
-        return random_scale, random_shift
+        if self.use_random_slopes:
+            return self.random_effects - self.random_effects.mean(0)[None,:]
+        else:
+            random_scale = torch.square(self.random_effects[:,0])
+            random_shift = self.random_effects[:,1] - self.random_effects[:,1].mean(0)
+            return random_scale, random_shift
     
 
     def _link_function(self, fixed, random, participant):
-        if random is None:
-            return torch.square(self.random_effects[:,0]).mean()*fixed.squeeze(1)
+        if self.use_random_slopes:
+            return fixed
         else:
-            random_scale, random_shift = random
-            return (random_scale[participant][:,None]*fixed +\
-                    random_shift[participant][:,None]).squeeze(1)
+            if random is None:
+                return torch.square(self.random_effects[:,0]).mean()*fixed.squeeze(1)
+            else:
+                random_scale, random_shift = random
+                return (random_scale[participant][:,None]*fixed +\
+                        random_shift[participant][:,None]).squeeze(1)
     
 
     def _random_loss(self, random):
-        random_scale, random_shift = random
-        
-        random_scale_loss = torch.mean(torch.square(random_scale/random_scale.mean(0)))
-        random_shift_loss = torch.mean(torch.square(random_shift/random_shift.std(0)))
-        
-        return (random_scale_loss + random_shift_loss)/2
+        if self.use_random_slopes:
+            mean = torch.zeros(random.shape[1])
+            cov = torch.matmul(torch.transpose(random, 1, 0), random) / (self.n_participants - 1)
+            return -torch.mean(MultivariateNormal(mean, cov).log_prob(random)[None,:])
+        else:
+            random_scale, random_shift = random
+            random_scale_loss = torch.mean(torch.square(random_scale/random_scale.mean(0)))
+            random_shift_loss = torch.mean(torch.square(random_shift/random_shift.std(0)))
+            return (random_scale_loss + random_shift_loss)/2
