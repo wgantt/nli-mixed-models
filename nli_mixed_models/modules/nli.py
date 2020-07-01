@@ -33,7 +33,7 @@ class NaturalLanguageInference(Module):
         self._initialize_random_effects()
      
 
-    def _initialize_predictor(self):
+    def _initialize_predictor(self, reduction_factor=2):
         """Creates an MLP predictor with n predictor layers, ReLU activation,
            and a 0.5 dropout layer."""
         seq = []
@@ -41,7 +41,7 @@ class NaturalLanguageInference(Module):
         prev_size = self.embedding_dim
         
         for l in range(self.n_predictor_layers):
-            curr_size = int(prev_size/2)
+            curr_size = int(prev_size/reduction_factor)
                 
             seq += [Linear(prev_size,
                            curr_size),
@@ -56,28 +56,22 @@ class NaturalLanguageInference(Module):
         return Sequential(*seq)
 
 
-    def _initialize_predictor_for_random_slopes(self, n_participants):
-        """Creates a seperate MLP predictor that has annotator-specific
-           final layers. Uses ReLU activation and a 0.5 dropout layer."""
-        seq = []
-        prev_size = self.embedding_dim
-        
-        # Weights are shared for all but the last linear layer
-        for l in range(self.n_predictor_layers):
-            curr_size = int(prev_size/2)
-                
-            seq += [Linear(prev_size,
-                           curr_size),
-                    ReLU(),
-                    Dropout(0.5)]
+    def _initialize_predictor_for_random_slopes(self, n_participants, hidden_dim=128):
+        """Creates MLP predictors that has annotator-specific
+           final layers. Uses ReLU activation and a 0.5 dropout layer.
 
-            prev_size = curr_size
+           TODO: make hidden_dim a model parameter. Note that it must be
+           less than n_participants to avoid having a singular covariance
+           matrix when computing the prior over the predictor head weights. 
+        """
 
         # Shared base
-        predictor_base = Sequential(*seq)
-        
+        predictor_base = Sequential(Linear(self.embedding_dim, hidden_dim),
+                                    ReLU(),
+                                    Dropout(0.5))
+    
         # Annotator-specific final layers
-        predictor_heads = ModuleList([Linear(prev_size,
+        predictor_heads = ModuleList([Linear(hidden_dim,
                        self.output_dim) for _ in range(n_participants)])
 
         return predictor_base, predictor_heads
