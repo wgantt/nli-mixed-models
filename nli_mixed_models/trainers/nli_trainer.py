@@ -4,10 +4,12 @@ import pandas as pd
 
 from torch.optim import Adam
 from torch.nn import CrossEntropyLoss, BCEWithLogitsLoss
-from ..modules.nli import (
+from ..modules.nli_random_intercepts import (
     UnitRandomIntercepts,
+    CategoricalRandomIntercepts
+)
+from ..modules.nli_random_slopes import (
     UnitRandomSlopes,
-    CategoricalRandomIntercepts,
     CategoricalRandomSlopes
 )
 

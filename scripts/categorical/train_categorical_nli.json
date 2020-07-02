@@ -11,5 +11,5 @@
     "verbosity": [10], 
     "batch_size": [128]
   },
-  "use_random_slopes": true
+  "use_random_slopes": false
 }
