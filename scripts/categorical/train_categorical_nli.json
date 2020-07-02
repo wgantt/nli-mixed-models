@@ -3,13 +3,13 @@
   "hyper": {
     "embedding_dim": [768],
     "n_predictor_layers": [1],
-    "tied_covariance": [false],
-    "use_random_slopes": [true]
+    "tied_covariance": [false]
   },
   "training": {
     "n_epochs": [25], 
     "lr": [0.001], 
     "verbosity": [10], 
     "batch_size": [128]
-  }
+  },
+  "use_random_slopes": true
 }

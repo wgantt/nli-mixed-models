@@ -1,6 +1,9 @@
 import argparse, json, torch
 
-from nli_mixed_models.trainers.nli_trainer import CategoricalNaturalLanguageInferenceTrainer
+from nli_mixed_models.trainers.nli_trainer import (
+    CategoricalRandomInterceptsTrainer,
+    CategoricalRandomSlopesTrainer
+    )
 from scripts.setup_logging import setup_logging
 from scripts.training_utils import (
     parameter_grid,
@@ -27,7 +30,10 @@ def main(args):
             # Initialize the model
             LOG.info('Initializing categorical NLI model with the following hyperparameters:')
             LOG.info(json.dumps(hyperparams, indent=4))
-            cnli_trainer = CategoricalNaturalLanguageInferenceTrainer(**hyperparams)
+            if params["use_random_slopes"]:
+                cnli_trainer = CategoricalRandomSlopesTrainer(**hyperparams)
+            else:
+                cnli_trainer = CategoricalRandomInterceptsTrainer(**hyperparams)
             LOG.info('...Complete')
 
             # Run the model

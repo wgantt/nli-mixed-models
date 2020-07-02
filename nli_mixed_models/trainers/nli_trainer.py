@@ -5,8 +5,10 @@ import pandas as pd
 from torch.optim import Adam
 from torch.nn import CrossEntropyLoss, BCEWithLogitsLoss
 from ..modules.nli import (
-    UnitNaturalLanguageInference,
-    CategoricalNaturalLanguageInference
+    UnitRandomIntercepts,
+    UnitRandomSlopes,
+    CategoricalRandomIntercepts,
+    CategoricalRandomSlopes
 )
 
 class NaturalLanguageInferenceTrainer:
@@ -15,20 +17,17 @@ class NaturalLanguageInferenceTrainer:
                  embedding_dim: int = 768, 
                  n_predictor_layers: int = 2,
                  tied_covariance: bool = False,
-                 use_random_slopes: bool = False,
                  device=torch.device('cpu')):
         self.embedding_dim = embedding_dim
         self.n_predictor_layers = n_predictor_layers
         self.n_participants = n_participants
         self.device = device
         self.tied_covariance = tied_covariance
-        self.use_random_slopes = use_random_slopes,
         self.nli = self.MODEL_CLASS(embedding_dim, 
                                     n_predictor_layers,
                                     self.OUTPUT_DIM, 
                                     n_participants,
                                     tied_covariance,
-                                    use_random_slopes,
                                     device)
     
     def fit(self, data: pd.DataFrame, batch_size: int = 32, 
@@ -68,14 +67,16 @@ class NaturalLanguageInferenceTrainer:
                 
                 loss_trace.append(loss.item()-random_loss.item())
                 
-                if self.MODEL_CLASS is CategoricalNaturalLanguageInference:
+                if self.MODEL_CLASS is CategoricalRandomIntercepts or \
+                   self.MODEL_CLASS is CategoricalRandomSlopes:
                     acc = (prediction.argmax(1) == target).data.cpu().numpy().mean()
                     best = (items.modal_response==items.target).mean()
                     
                     acc_trace.append(acc)
                     best_trace.append(acc/best)
                     
-                elif self.MODEL_CLASS is UnitNaturalLanguageInference:
+                elif self.MODEL_CLASS is UnitRandomIntercepts or \
+                     self.MODEL_CLASS is UnitRandomSlopes:
                     acc = loss_trace[-1]
                     best = -(items.target.values * np.log(items.modal_response.values) +\
                              (1-items.target.values) * np.log(1-items.modal_response.values)).mean()
@@ -102,14 +103,24 @@ class NaturalLanguageInferenceTrainer:
                 
         return self.nli.eval()
 
-class UnitNaturalLanguageInferenceTrainer(NaturalLanguageInferenceTrainer):
-    MODEL_CLASS = UnitNaturalLanguageInference
+class UnitTrainer(NaturalLanguageInferenceTrainer):
     LOSS_CLASS = BCEWithLogitsLoss
     TARGET_TYPE = torch.FloatTensor
     OUTPUT_DIM = 1
 
-class CategoricalNaturalLanguageInferenceTrainer(NaturalLanguageInferenceTrainer):
-    MODEL_CLASS = CategoricalNaturalLanguageInference
+class UnitRandomInterceptsTrainer(UnitTrainer):
+    MODEL_CLASS = UnitRandomIntercepts
+
+class UnitRandomSlopesTrainer(UnitTrainer):
+    MODEL_CLASS = UnitRandomSlopes
+
+class CategoricalTrainer(NaturalLanguageInferenceTrainer):
     LOSS_CLASS = CrossEntropyLoss
     TARGET_TYPE = torch.LongTensor
     OUTPUT_DIM = 3
+
+class CategoricalRandomInterceptsTrainer(CategoricalTrainer):
+    MODEL_CLASS = CategoricalRandomIntercepts
+
+class CategoricalRandomSlopesTrainer(CategoricalTrainer):
+    MODEL_CLASS = CategoricalRandomSlopes

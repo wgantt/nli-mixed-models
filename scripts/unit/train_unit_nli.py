@@ -1,6 +1,9 @@
 import argparse, json, torch
 
-from nli_mixed_models.trainers.nli_trainer import UnitNaturalLanguageInferenceTrainer
+from nli_mixed_models.trainers.nli_trainer import (
+    UnitRandomInterceptsTrainer,
+    UnitRandomSlopesTrainer
+    )
 from scripts.setup_logging import setup_logging
 from scripts.training_utils import (
     parameter_grid,
@@ -27,7 +30,10 @@ def main(args):
             # Initialize the model
             LOG.info('Initializing unit NLI model with the following hyperparameters:')
             LOG.info(json.dumps(hyperparams, indent=4))
-            unli_trainer = UnitNaturalLanguageInferenceTrainer(**hyperparams)
+            if params["use_random_slopes"]:
+                unli_trainer = UnitRandomSlopesTrainer(**hyperparams)
+            else:
+                unli_trainer = UnitRandomInterceptsTrainer(**hyperparams)
             LOG.info('...Complete')
 
             # Run the model
