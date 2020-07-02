@@ -3,7 +3,7 @@ import pandas as pd
 
 from typing import Tuple
 from torch import cat, flatten
-from torch.nn import Module, ModuleList, Linear, ReLU, Sequential, Dropout
+from torch.nn import Module, ModuleList, Linear, ReLU, Sequential, Dropout, Parameter
 from torch.distributions.multivariate_normal import MultivariateNormal
 from fairseq.data.data_utils import collate_tokens
 
@@ -18,7 +18,7 @@ class RandomInterceptsModel(NaturalLanguageInference):
                          n_participants, tied_covariance, device)
 
         self.predictor = self._initialize_predictor()
-        self._initialize_random_effects()
+        self.random_effects = Parameter(self._initialize_random_effects())
 
     
     def _initialize_predictor(self, reduction_factor=2):
@@ -74,7 +74,7 @@ class CategoricalRandomIntercepts(RandomInterceptsModel):
 
     def _initialize_random_effects(self):
         """Initializes random effects - random intercept terms generated from a standard normal."""
-        self.random_effects = torch.randn(self.n_participants, self.output_dim, requires_grad=True)
+        return torch.randn(self.n_participants, self.output_dim)
     
 
     def _random_effects(self):
@@ -102,7 +102,13 @@ class CategoricalRandomIntercepts(RandomInterceptsModel):
         else:
             mean = torch.zeros(self.output_dim)
             cov = torch.matmul(torch.transpose(random, 1, 0), random) / (self.n_participants - 1)
-            return -torch.mean(MultivariateNormal(mean, cov).log_prob(random)[None,:])
+            invcov = torch.inverse(cov)
+            return torch.matmul(torch.matmul(random.unsqueeze(1), invcov), torch.transpose(random.unsqueeze(1), 1, 2)).mean(0)
+
+            # Strangely, computing the loss this way results in its being variable
+            # where it should be constant. For this reason, we compute the unnormalized
+            # PDF directly.
+            # return -torch.mean(MultivariateNormal(mean, cov).log_prob(random)[None,:])
 
 
 
@@ -110,7 +116,7 @@ class UnitRandomIntercepts(RandomInterceptsModel):
     
     # TODO: Ben Kane - Convert to using beta distribution
     def _initialize_random_effects(self):
-        self.random_effects = torch.randn(self.n_participants, 2)
+        return torch.randn(self.n_participants, 2)
         
 
     def _random_effects(self):

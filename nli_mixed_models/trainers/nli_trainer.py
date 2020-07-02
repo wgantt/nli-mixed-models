@@ -55,10 +55,6 @@ class NaturalLanguageInferenceTrainer:
             
             for batch, items in data.groupby('batch_idx'):
                 self.nli.zero_grad()
-
-                # Debugging
-                for name, param in self.nli.named_parameters():
-                    print('%s : requires_grad = %s' % (name, param.requires_grad))
                 
                 participant = torch.LongTensor(items.participant.values).to(self.device)
                 target = self.TARGET_TYPE(items.target.values)

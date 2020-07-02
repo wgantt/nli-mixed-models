@@ -3,7 +3,7 @@ import pandas as pd
 
 from typing import Tuple
 from torch import cat, flatten
-from torch.nn import Module, ModuleList, Linear, ReLU, Sequential, Dropout
+from torch.nn import Module, ModuleList, Linear, ReLU, Sequential, Dropout, Parameter
 from torch.distributions.multivariate_normal import MultivariateNormal
 from fairseq.data.data_utils import collate_tokens
 
@@ -18,7 +18,7 @@ class RandomSlopesModel(NaturalLanguageInference):
                          n_participants, tied_covariance, device)
         
         self.predictor_base, self.predictor_heads = self._initialize_predictor(self.n_participants)
-        self._initialize_random_effects()
+        self.random_effects = Parameter(self._initialize_random_effects())
 
 
     def _initialize_predictor(self, n_participants, hidden_dim=128):
@@ -89,7 +89,7 @@ class CategoricalRandomSlopes(RandomSlopesModel):
     def _initialize_random_effects(self):
         """Initializes random effects as the MLP parameters."""
         # shape = n_participants x len(flattened MLP weights + biases)
-        self.random_effects = self._extract_random_slopes_params()
+        return self._extract_random_slopes_params()
     
 
     def _random_effects(self):
@@ -120,7 +120,11 @@ class CategoricalRandomSlopes(RandomSlopesModel):
         else:
             mean = torch.zeros(random.shape[1])
             cov = torch.matmul(torch.transpose(random, 1, 0), random) / (self.n_participants - 1)
-            return -torch.mean(MultivariateNormal(mean, cov).log_prob(random)[None,:])
+            invcov = torch.inverse(cov)
+            return torch.matmul(torch.matmul(random.unsqueeze(1), invcov), torch.transpose(random.unsqueeze(1), 1, 2)).mean(0)
+
+            # See comment in nli_random_intercepts.py for why this is commented out
+            # return -torch.mean(MultivariateNormal(mean, cov).log_prob(random)[None,:])
 
 
 
@@ -128,7 +132,7 @@ class UnitRandomSlopes(RandomSlopesModel):
     
     # TODO: Ben Kane - Convert to using beta distribution
     def _initialize_random_effects(self):
-        self.random_effects = self._extract_random_slopes_params()
+        return self._extract_random_slopes_params()
         
 
     def _random_effects(self):
