@@ -13,9 +13,9 @@ class RandomInterceptsModel(NaturalLanguageInference):
 
     def __init__(self, embedding_dim: int, n_predictor_layers: int,  
                  output_dim: int, n_participants: int,
-                 tied_covariance=False, device=torch.device('cpu')):
+                 device=torch.device('cpu')):
         super().__init__(embedding_dim, n_predictor_layers, output_dim,
-                         n_participants, tied_covariance, device)
+                         n_participants, device)
 
         self.predictor = self._initialize_predictor()
         self.random_effects = Parameter(self._initialize_random_effects())
@@ -24,19 +24,16 @@ class RandomInterceptsModel(NaturalLanguageInference):
         self.squashing_function = sigmoid
 
     
-    def _initialize_predictor(self, reduction_factor=2):
+    def _initialize_predictor(self):
         """Creates an MLP predictor with n predictor layers, ReLU activation,
            and a 0.5 dropout layer.
-
-           TODO: come up with a better name than 'reduction_factor', make it
-           a model parameter.
         """
         seq = []
         
         prev_size = self.embedding_dim
         
         for l in range(self.n_predictor_layers):
-            curr_size = int(prev_size/reduction_factor)
+            curr_size = int(prev_size/2)
                 
             seq += [Linear(prev_size,
                            curr_size),
@@ -100,19 +97,16 @@ class CategoricalRandomIntercepts(RandomInterceptsModel):
         # or only over a subset. Currently random loss is computed over ALL annotators
         # at each iteration. TBD whether this makes a difference or not. Regardless,
         # the covariance should always be estimated from all annotators.
-        if self.tied_covariance:
-            return torch.mean(torch.square(random/random.std(0)[None,:]))
-        else:
-            mean = torch.zeros(self.output_dim)
-            cov = torch.matmul(torch.transpose(random, 1, 0), random) / (self.n_participants - 1)
-            invcov = torch.inverse(cov)
-            return torch.matmul(torch.matmul(random.unsqueeze(1), invcov), \
-                                torch.transpose(random.unsqueeze(1), 1, 2)).mean(0)
+        mean = torch.zeros(self.output_dim)
+        cov = torch.matmul(torch.transpose(random, 1, 0), random) / (self.n_participants - 1)
+        invcov = torch.inverse(cov)
+        return torch.matmul(torch.matmul(random.unsqueeze(1), invcov), \
+                            torch.transpose(random.unsqueeze(1), 1, 2)).mean(0)
 
-            # Strangely, computing the loss this way results in its being variable
-            # where it should be constant. For this reason, we compute the unnormalized
-            # PDF directly.
-            # return -torch.mean(MultivariateNormal(mean, cov).log_prob(random)[None,:])
+        # Strangely, computing the loss this way results in its being variable
+        # where it should be constant. For this reason, we compute the unnormalized
+        # PDF directly.
+        # return -torch.mean(MultivariateNormal(mean, cov).log_prob(random)[None,:])
 
 
 
@@ -165,8 +159,9 @@ class UnitRandomInterceptsBeta(RandomInterceptsModel):
         if random is None:
             # TODO: Handle case where there's no random component. Not sure
             # what the right thing to do here is; the link function in
-            # UnitRandomInterceptsNormal _still_ seems to use a random component,
-            # which doesn't make sense to me.
+            # UnitRandomInterceptsNormal uses the mean of the random scaling
+            # terms to scale the fixed effect. Since we're not using a random
+            # scaling term here, I'm unsure what to do
             raise NotImplementedError()
         else:
             random_shift, random_variance = random

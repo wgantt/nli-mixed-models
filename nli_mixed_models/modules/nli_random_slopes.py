@@ -13,9 +13,9 @@ class RandomSlopesModel(NaturalLanguageInference):
 
     def __init__(self, embedding_dim: int, n_predictor_layers: int,  
                  output_dim: int, n_participants: int,
-                 tied_covariance=False, device=torch.device('cpu')):
+                 device=torch.device('cpu')):
         super().__init__(embedding_dim, n_predictor_layers, output_dim,
-                         n_participants, tied_covariance, device)
+                         n_participants, device)
         
         self.predictor_base, self.predictor_heads = self._initialize_predictor(self.n_participants)
         self.random_effects = Parameter(self._initialize_random_effects())
@@ -115,16 +115,12 @@ class CategoricalRandomSlopes(RandomSlopesModel):
         # or only over a subset. Currently random loss is computed over ALL annotators
         # at each iteration. TBD whether this makes a difference or not. Regardless,
         # the covariance should always be estimated from all annotators.
-        if self.tied_covariance:
-            return torch.mean(torch.square(random/random.std(0)[None,:]))
-        else:
-            mean = torch.zeros(random.shape[1])
-            cov = torch.matmul(torch.transpose(random, 1, 0), random) / (self.n_participants - 1)
-            invcov = torch.inverse(cov)
-            return torch.matmul(torch.matmul(random.unsqueeze(1), invcov), torch.transpose(random.unsqueeze(1), 1, 2)).mean(0)
-
-            # See comment in nli_random_intercepts.py for why this is commented out
-            # return -torch.mean(MultivariateNormal(mean, cov).log_prob(random)[None,:])
+        mean = torch.zeros(random.shape[1])
+        cov = torch.matmul(torch.transpose(random, 1, 0), random) / (self.n_participants - 1)
+        invcov = torch.inverse(cov)
+        print(random.unsqueeze(1).shape)
+        return torch.matmul(torch.matmul(random.unsqueeze(1), invcov), \
+                            torch.transpose(random.unsqueeze(1), 1, 2)).mean(0)
 
 
 
@@ -139,10 +135,12 @@ class UnitRandomSlopes(RandomSlopesModel):
     
 
     def _link_function(self, fixed, random, participant):
-        return fixed
+        return fixed.squeeze(1)
     
 
     def _random_loss(self, random):
         mean = torch.zeros(random.shape[1])
         cov = torch.matmul(torch.transpose(random, 1, 0), random) / (self.n_participants - 1)
-        return -torch.mean(MultivariateNormal(mean, cov).log_prob(random)[None,:])
+        invcov = torch.inverse(cov)
+        return torch.matmul(torch.matmul(random.unsqueeze(1), invcov), \
+                    torch.transpose(random.unsqueeze(1), 1, 2)).mean(0)

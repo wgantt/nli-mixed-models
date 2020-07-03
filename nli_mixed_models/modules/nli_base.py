@@ -11,7 +11,7 @@ class NaturalLanguageInference(Module):
     
     def __init__(self, embedding_dim: int, n_predictor_layers: int,  
                  output_dim: int, n_participants: int,
-                 tied_covariance=False, device=torch.device('cpu')):
+                 device=torch.device('cpu')):
         super().__init__()
         
         self.roberta = torch.hub.load('pytorch/fairseq', 'roberta.base')
@@ -20,7 +20,6 @@ class NaturalLanguageInference(Module):
         self.n_predictor_layers = n_predictor_layers
         self.output_dim = output_dim
         self.n_participants = n_participants
-        self.tied_covariance = tied_covariance
         self.device = device
 
 

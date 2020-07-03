@@ -2,8 +2,7 @@
   "ckpt_path": [null],
   "hyper": {
     "embedding_dim": [768],
-    "n_predictor_layers": [1],
-    "tied_covariance": [false]
+    "n_predictor_layers": [1]
   },
   "training": {
     "n_epochs": [25], 

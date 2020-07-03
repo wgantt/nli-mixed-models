@@ -19,18 +19,15 @@ class NaturalLanguageInferenceTrainer:
     def __init__(self, n_participants: int, 
                  embedding_dim: int = 768, 
                  n_predictor_layers: int = 2,
-                 tied_covariance: bool = False,
                  device=torch.device('cpu')):
         self.embedding_dim = embedding_dim
         self.n_predictor_layers = n_predictor_layers
         self.n_participants = n_participants
         self.device = device
-        self.tied_covariance = tied_covariance
         self.nli = self.MODEL_CLASS(embedding_dim, 
                                     n_predictor_layers,
                                     self.OUTPUT_DIM, 
                                     n_participants,
-                                    tied_covariance,
                                     device)
     
     def fit(self, data: pd.DataFrame, batch_size: int = 32, 
