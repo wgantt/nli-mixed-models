@@ -1,7 +1,8 @@
 import argparse, json, torch
 
 from nli_mixed_models.trainers.nli_trainer import (
-    UnitRandomInterceptsTrainer,
+    UnitRandomInterceptsNormalTrainer,
+    UnitRandomInterceptsBetaTrainer,
     UnitRandomSlopesTrainer
     )
 from scripts.setup_logging import setup_logging
@@ -32,8 +33,10 @@ def main(args):
             LOG.info(json.dumps(hyperparams, indent=4))
             if params["use_random_slopes"]:
                 unli_trainer = UnitRandomSlopesTrainer(**hyperparams)
+            elif params["use_beta_distribution"]:
+                unli_trainer = UnitRandomInterceptsBetaTrainer(**hyperparams)
             else:
-                unli_trainer = UnitRandomInterceptsTrainer(**hyperparams)
+                unli_trainer = UnitRandomInterceptsNormalTrainer(**hyperparams)
             LOG.info('...Complete')
 
             # Run the model

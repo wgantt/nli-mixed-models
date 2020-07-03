@@ -130,7 +130,6 @@ class CategoricalRandomSlopes(RandomSlopesModel):
 
 class UnitRandomSlopes(RandomSlopesModel):
     
-    # TODO: Ben Kane - Convert to using beta distribution
     def _initialize_random_effects(self):
         return self._extract_random_slopes_params()
         

@@ -5,7 +5,8 @@ import pandas as pd
 from torch.optim import Adam
 from torch.nn import CrossEntropyLoss, BCEWithLogitsLoss
 from ..modules.nli_random_intercepts import (
-    UnitRandomIntercepts,
+    UnitRandomInterceptsNormal,
+    UnitRandomInterceptsBeta,
     CategoricalRandomIntercepts
 )
 from ..modules.nli_random_slopes import (
@@ -77,7 +78,8 @@ class NaturalLanguageInferenceTrainer:
                     acc_trace.append(acc)
                     best_trace.append(acc/best)
                     
-                elif self.MODEL_CLASS is UnitRandomIntercepts or \
+                elif self.MODEL_CLASS is UnitRandomInterceptsNormal or \
+                     self.MODEL_CLASS is UnitRandomInterceptsBeta or \
                      self.MODEL_CLASS is UnitRandomSlopes:
                     acc = loss_trace[-1]
                     best = -(items.target.values * np.log(items.modal_response.values) +\
@@ -110,8 +112,11 @@ class UnitTrainer(NaturalLanguageInferenceTrainer):
     TARGET_TYPE = torch.FloatTensor
     OUTPUT_DIM = 1
 
-class UnitRandomInterceptsTrainer(UnitTrainer):
-    MODEL_CLASS = UnitRandomIntercepts
+class UnitRandomInterceptsNormalTrainer(UnitTrainer):
+    MODEL_CLASS = UnitRandomInterceptsNormal
+
+class UnitRandomInterceptsBetaTrainer(UnitTrainer):
+    MODEL_CLASS = UnitRandomInterceptsBeta
 
 class UnitRandomSlopesTrainer(UnitTrainer):
     MODEL_CLASS = UnitRandomSlopes

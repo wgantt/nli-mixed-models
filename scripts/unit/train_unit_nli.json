@@ -10,5 +10,6 @@
     "verbosity": [10], 
     "batch_size": [128]
   },
-  "use_random_slopes": false
+  "use_random_slopes": false,
+  "use_beta_distribution": true
 }

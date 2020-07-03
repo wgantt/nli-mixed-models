@@ -2,7 +2,7 @@ import torch
 import pandas as pd
 
 from typing import Tuple
-from torch import cat, flatten
+from torch import cat, flatten, sigmoid
 from torch.nn import Module, ModuleList, Linear, ReLU, Sequential, Dropout, Parameter
 from torch.distributions.multivariate_normal import MultivariateNormal
 from fairseq.data.data_utils import collate_tokens
@@ -19,6 +19,9 @@ class RandomInterceptsModel(NaturalLanguageInference):
 
         self.predictor = self._initialize_predictor()
         self.random_effects = Parameter(self._initialize_random_effects())
+
+        # TODO: make this configurable
+        self.squashing_function = sigmoid
 
     
     def _initialize_predictor(self, reduction_factor=2):
@@ -103,7 +106,8 @@ class CategoricalRandomIntercepts(RandomInterceptsModel):
             mean = torch.zeros(self.output_dim)
             cov = torch.matmul(torch.transpose(random, 1, 0), random) / (self.n_participants - 1)
             invcov = torch.inverse(cov)
-            return torch.matmul(torch.matmul(random.unsqueeze(1), invcov), torch.transpose(random.unsqueeze(1), 1, 2)).mean(0)
+            return torch.matmul(torch.matmul(random.unsqueeze(1), invcov), \
+                                torch.transpose(random.unsqueeze(1), 1, 2)).mean(0)
 
             # Strangely, computing the loss this way results in its being variable
             # where it should be constant. For this reason, we compute the unnormalized
@@ -112,9 +116,9 @@ class CategoricalRandomIntercepts(RandomInterceptsModel):
 
 
 
-class UnitRandomIntercepts(RandomInterceptsModel):
-    
-    # TODO: Ben Kane - Convert to using beta distribution
+class UnitRandomInterceptsNormal(RandomInterceptsModel):
+    """Aaron's original implementation of the Unit NLI model"""
+
     def _initialize_random_effects(self):
         return torch.randn(self.n_participants, 2)
         
@@ -139,3 +143,58 @@ class UnitRandomIntercepts(RandomInterceptsModel):
         random_scale_loss = torch.mean(torch.square(random_scale/random_scale.mean(0)))
         random_shift_loss = torch.mean(torch.square(random_shift/random_shift.std(0)))
         return (random_scale_loss + random_shift_loss)/2
+
+
+class UnitRandomInterceptsBeta(RandomInterceptsModel):
+
+
+    def _initialize_random_effects(self):
+        # For the beta distribution, the random effects are:
+        #   1) A random shifting term (positive or negative)
+        #   2) The variance of the beta distribution itself (nonnegative)
+        # The non-negativity of the variance is enforced in the link function
+        return torch.randn(self.n_participants, 2)
+
+    def _random_effects(self):
+        random_variance = self.random_effects[:,0]
+        random_shift = self.random_effects[:,1] - self.random_effects[:,1].mean(0)
+
+        return random_shift, random_variance
+
+    def _link_function(self, fixed, random, participant):
+        if random is None:
+            # TODO: Handle case where there's no random component. Not sure
+            # what the right thing to do here is; the link function in
+            # UnitRandomInterceptsNormal _still_ seems to use a random component,
+            # which doesn't make sense to me.
+            raise NotImplementedError()
+        else:
+            random_shift, random_variance = random
+
+            # This is the mean of the beta distribution
+            mean = self.squashing_function(fixed + random_shift[participant][:,None]).squeeze(1)
+
+            # Parameter estimates for the beta distribution. These are
+            # estimated from the mean and variance. Since both components
+            # are initialized by randn, we use abs to enforce non-negativity
+            # for random_variance
+            alpha = mean * torch.abs(random_variance[participant])
+            beta = (1 - mean) * torch.abs(random_variance[participant])
+
+            # The prediction is just the expected value for the beta
+            # distribution whose parameters we've just estimated.
+            return alpha / (alpha + beta)
+
+    def _random_loss(self, random):
+        # For the random loss, we jointly model both random effects components,
+        # assuming they're distributed as a MultivariateNormal
+        random_shift, random_variance = random
+        combined = torch.cat([random_variance.unsqueeze(1), random_shift.unsqueeze(1)], dim=1)
+
+        # Parameter estimates for the prior
+        mean = combined.mean(0)
+        cov = torch.matmul(torch.transpose(combined, 1, 0), combined) / (self.n_participants - 1)
+        invcov = torch.inverse(cov)
+        return torch.matmul(torch.matmul(combined.unsqueeze(1), invcov), \
+                            torch.transpose(combined.unsqueeze(1), 1, 2)).mean(0)
+
