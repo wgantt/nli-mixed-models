@@ -44,10 +44,10 @@ def load_veridicality():
 			return 'That person had that thing.'
 
 	# Read the CSV
-	ver = pd.read_csv(VERIDICALITY_URL)
+	df = pd.read_csv(VERIDICALITY_URL)
 
 	# Remove non-native English speakers
-	ver = ver[ver.nativeenglish]
+	df = df[df.nativeenglish]
 
 	"""
 	MegaVeridicality contains judgments to the same items presented under two
@@ -60,33 +60,33 @@ def load_veridicality():
 
 	We remove responses to conditional items.
 	"""
-	ver = ver[~ver.conditional]
+	df = df[~df.conditional]
 
 	# Finally, we remove NA responses, which arise from MTurk errors.
-	ver = ver[~ver.veridicality.isnull()]
+	df = df[~df.veridicality.isnull()]
 
 	# Add a column for the veridicality hypothesis.
-	ver['hypothesis'] = ver.frame.map(make_hypothesis)
+	df['hypothesis'] = df.frame.map(make_hypothesis)
 
 	# Convert responses to integers: no = 0, maybe = 1, yes = 2. This is
 	# required for the model.
-	ver['veridicality'] = ver.veridicality.astype(CategoricalDtype(['no', 'maybe', 'yes']))
-	ver['target'] = ver.veridicality.cat.codes
+	df['veridicality'] = df.veridicality.astype(CategoricalDtype(['no', 'maybe', 'yes']))
+	df['target'] = df.veridicality.cat.codes
 
 	"""
 	We similarly convert the participant indices to contiguous integers. 
 	This step is necessary since we removed some participants, meaning the
-	participant identifiers are not necessarily contiguous. This conversion
+	participant identifiers are not necessarily contiguous. This condfsion
 	is necessary for the random effects component of the model.
 	"""
-	ver['participant'] = ver.participant.astype('category').cat.codes
+	df['participant'] = df.participant.astype('category').cat.codes
 
 	# Lastly, we compute the modal response for each verb-frame pair. This
 	# will allow us to determine how well the model does in comparison to
 	# the best possible model.
-	ver['modal_response'] = ver.groupby(['verb', 'frame']).target.transform(lambda x: int(np.round(np.mean(x))))
+	df['modal_response'] = df.groupby(['verb', 'frame']).target.transform(lambda x: int(np.round(np.mean(x))))
 
-	return ver
+	return df
 
 
 def load_neg_raising():
@@ -197,3 +197,81 @@ def load_acceptability():
 	acc['verbform'] = acc[['sentence', 'verbidx']].apply(lambda x: get_verb_form(*x), axis=1)
 
 	return acc
+
+def generate_random_splits(df, k_folds=5):
+	"""Generates purely random k-fold splits of a dataframe"""
+
+	# Assign each row a fold number, corresponding to its index mod k_folds.
+	# This ensures an even number of items in each fold
+	df['fold'] = df.apply(lambda row: row.name % k_folds, axis=1)
+
+	# Randomly shuffle the fold assignments
+	df['fold'] = df['fold'].sample(frac=1, replace=False)
+
+	return df
+
+def generate_predicate_splits(df, k_folds=5):
+	"""Generates predicate-based splits
+
+	All items featuring a particular predicate will be in the same split.
+	The DataFrame is assumed to have a 'verb' column containing the
+	predicate lemma
+	"""
+	df['fold'] = df.verb.astype('category').cat.codes
+	df['fold'] = df.apply(lambda row: row.fold % k_folds, axis=1)
+	return df
+
+def generate_syntax_splits(df, datatype, k_folds=5):
+	"""Generates syntax-based splits
+
+	All items sharing a particular syntactic structure will be in the same
+	split. Note: There are far fewer syntax categories than categories for
+	the other split methods.
+	"""
+
+	# Veridicality: partition on frame, voice, and polarity
+	if datatype == 'v':
+		# Create a new column that contains all the relevant
+		# syntactic properties for the split
+		df['fold'] = df.apply(lambda row: '-'.join([row.frame, row.voice, row.polarity]), axis=1)
+
+	# Neg-raising: partition on frame, tense, and subject
+	elif datatype == 'n':
+		# Do the same for neg-raising (just different properties)
+		df['fold'] = df.apply(lambda row: '-'.join([row.frame, row.tense, row.subject]), axis=1)
+	else:
+		raise ValueError(f'Unknown dataset type {datatype}!')
+
+	# Convert these values to integers
+	df['fold'] = df['fold'].astype('category').cat.codes
+
+	# Assign each category to a fold
+	df['fold'] = df.apply(lambda row: df['fold'] % k_folds)
+
+	return df
+
+
+def generate_annotator_splits(df, k_folds=5):
+	"""Generate annotator folds
+
+	All items for a particular annotator are contained within the same fold.
+	The dataframe is assumed to have a 'participant' column with contiguous
+	integer participant IDs. One difficulty here is that, for veridicality,
+	there are a few annotators who annotated many times more items than others,
+	So the splits can end up being rather uneven.
+	"""
+	df['fold'] = df.apply(lambda row: row.participant % k_folds, axis=1)
+	return df
+
+def generate_splits(df, split_type, k_folds=5, datatype=None):
+	if split_type == 'random':
+	    df = generate_random_splits(df, k_folds=k_folds)
+	elif split_type == 'predicate':
+	    df = generate_predicate_splits(df, k_folds=k_folds)
+	elif split_type == 'annotator':
+	    df = generate_annotator_splits(df, k_folds=k_folds)
+	elif split_type == 'syntax':
+	    df = generate_syntax_splits(df, datatype=datatype, k_folds=k_folds)
+	else:
+	    raise ValueError(f'Unknown split type {split_type}')
+	return df
