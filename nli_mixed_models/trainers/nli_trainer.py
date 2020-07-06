@@ -13,8 +13,16 @@ from ..modules.nli_random_slopes import (
     UnitRandomSlopes,
     CategoricalRandomSlopes
 )
+from scripts.eval_utils import (
+    accuracy,
+    absolute_error,
+    accuracy_best,
+    absolute_error_best
+)
 
 class NaturalLanguageInferenceTrainer:
+    # TODO: This could probably be made a bit neater by abstracting
+    # the metric (i.e. accuracy/absolute error) into the subclasses
     
     def __init__(self, n_participants: int, 
                  embedding_dim: int = 768, 
@@ -29,6 +37,10 @@ class NaturalLanguageInferenceTrainer:
                                     self.OUTPUT_DIM, 
                                     n_participants,
                                     device)
+        self.data_type = 'categorical' if \
+            self.MODEL_CLASS is CategoricalRandomIntercepts or \
+            self.MODEL_CLASS is CategoricalRandomSlopes \
+            else 'unit'
     
     def fit(self, data: pd.DataFrame, batch_size: int = 32, 
             n_epochs: int = 10, lr: float = 1e-2, verbosity: int = 10):
@@ -48,7 +60,7 @@ class NaturalLanguageInferenceTrainer:
             data['batch_idx'] = np.repeat(np.arange(n_batches), batch_size)[:data.shape[0]]
             
             loss_trace = []
-            acc_trace = []
+            metric_trace = []
             best_trace = []
             
             for batch, items in data.groupby('batch_idx'):
@@ -65,38 +77,37 @@ class NaturalLanguageInferenceTrainer:
                 
                 loss = fixed_loss + random_loss
                 
-                loss_trace.append(loss.item()-random_loss.item())
+                # Shouldn't this include the random loss? -B.K.
+                # loss_trace.append(loss.item()-random_loss.item())
+                loss_trace.append(loss.item())
                 
-                if self.MODEL_CLASS is CategoricalRandomIntercepts or \
-                   self.MODEL_CLASS is CategoricalRandomSlopes:
-                    acc = (prediction.argmax(1) == target).data.cpu().numpy().mean()
-                    best = (items.modal_response==items.target).mean()
-                    
-                    acc_trace.append(acc)
+                if self.data_type == 'categorical':
+                    acc = accuracy(prediction, target)
+                    best = accuracy_best(items)
+                    metric_trace.append(acc)
                     best_trace.append(acc/best)
                     
-                elif self.MODEL_CLASS is UnitRandomInterceptsNormal or \
-                     self.MODEL_CLASS is UnitRandomInterceptsBeta or \
-                     self.MODEL_CLASS is UnitRandomSlopes:
-                    acc = loss_trace[-1]
-                    best = -(items.target.values * np.log(items.modal_response.values) +\
-                             (1-items.target.values) * np.log(1-items.modal_response.values)).mean()
-                    
-                    acc_trace.append(acc)
-                    best_trace.append(1 - (acc-best)/best)
+                elif self.data_type == 'unit':
+                    error = absolute_error(prediction, target)
+                    best = absolute_error_best(items)
+                    metric_trace.append(error)
+                    best_trace.append(1 - (error-best)/best)
                 
                 if not (batch % verbosity):
                     print('epoch:              ', int(epoch))
                     print('batch:              ', int(batch))
                     print('mean loss:          ', np.round(np.mean(loss_trace), 2))
-                    print('mean acc.:          ', np.round(np.mean(acc_trace), 2))
+                    if self.data_type == 'categorical':
+                        print('mean acc.:          ', np.round(np.mean(metric_trace), 2))
+                    elif self.data_type == 'unit':
+                        print('mean error:          ', np.round(np.mean(metric_trace), 2))
                     print('prop. best possible:', np.round(np.mean(best_trace), 2))
                     print()
                     
                     print()
 
                     loss_trace = []
-                    acc_trace = []
+                    metric_trace = []
                     best_trace = []
                 
                 loss.backward()

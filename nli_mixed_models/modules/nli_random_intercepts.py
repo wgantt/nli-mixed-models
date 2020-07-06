@@ -5,6 +5,7 @@ from typing import Tuple
 from torch import cat, flatten, sigmoid
 from torch.nn import Module, ModuleList, Linear, ReLU, Sequential, Dropout, Parameter
 from torch.distributions.multivariate_normal import MultivariateNormal
+from torch.distributions import Beta
 from fairseq.data.data_utils import collate_tokens
 
 from .nli_base import NaturalLanguageInference
