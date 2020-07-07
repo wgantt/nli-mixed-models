@@ -201,12 +201,27 @@ def load_acceptability():
 def generate_random_splits(df, k_folds=5):
 	"""Generates purely random k-fold splits of a dataframe"""
 
+	# Sort the data by participant before generating the folds. This
+	# will guarantee that each participant appears in each fold.
+	df.sort_values(by='participant', inplace=True, ignore_index=True)
+
 	# Assign each row a fold number, corresponding to its index mod k_folds.
 	# This ensures an even number of items in each fold
 	df['fold'] = df.apply(lambda row: row.name % k_folds, axis=1)
 
 	# Randomly shuffle the fold assignments
 	df['fold'] = df['fold'].sample(frac=1, replace=False)
+
+	# Verify
+	_assert_each_value_in_each_fold(df, 'participant')
+
+	# Show how many items are in each fold
+	print('Items per fold:')
+	print(df.groupby('fold')['participant'].count())
+
+	# Show how many annotators are in each fold
+	print('Unique annotators per fold:')
+	print(df.groupby('fold')['participant'].nunique())
 
 	return df
 
@@ -215,10 +230,27 @@ def generate_predicate_splits(df, k_folds=5):
 
 	All items featuring a particular predicate will be in the same split.
 	The DataFrame is assumed to have a 'verb' column containing the
-	predicate lemma
+	predicate lemma.
 	"""
+
+	# Assign each verb type to its own fold
 	df['fold'] = df.verb.astype('category').cat.codes
 	df['fold'] = df.apply(lambda row: row.fold % k_folds, axis=1)
+
+	# Verify that each verb appears in exactly one fold
+	_assert_unique_to_fold(df, 'verb')
+
+	# Show how many items are in each fold
+	print('Items per fold:')
+	print(df.groupby('fold')['participant'].count())
+
+	# Show how many annotators are in each fold. Interestingly,
+	# we don't seem to need to do anything fancy to make it so that
+	# nearly all annotators appear in all folds (for k=5)
+	print('Unique annotators per fold:')
+	print(df.groupby('fold')['participant'].nunique())
+
+	# return df
 	return df
 
 def generate_syntax_splits(df, datatype, k_folds=5):
@@ -233,20 +265,28 @@ def generate_syntax_splits(df, datatype, k_folds=5):
 	if datatype == 'v':
 		# Create a new column that contains all the relevant
 		# syntactic properties for the split
-		df['fold'] = df.apply(lambda row: '-'.join([row.frame, row.voice, row.polarity]), axis=1)
+		df['syntax'] = df.apply(lambda row: '-'.join([row.frame, row.voice, row.polarity]), axis=1)
 
 	# Neg-raising: partition on frame, tense, and subject
 	elif datatype == 'n':
 		# Do the same for neg-raising (just different properties)
-		df['fold'] = df.apply(lambda row: '-'.join([row.frame, row.tense, row.subject]), axis=1)
+		df['syntax'] = df.apply(lambda row: '-'.join([row.frame, row.tense, row.subject]), axis=1)
 	else:
 		raise ValueError(f'Unknown dataset type {datatype}!')
 
-	# Convert these values to integers
-	df['fold'] = df['fold'].astype('category').cat.codes
+	# Assign each syntax combination to a fold. This works fine for
+	# neg-raising, but for veridicality, there's a seemingly irresolvable
+	# problem in which one fold ends up with 357 annotators, whereas
+	# all others have the full 507, assuming k=5.
+	df['syntax'] = df.syntax.astype('category').cat.codes
+	df['fold'] = df.apply(lambda row: row.syntax % k_folds, axis=1)
 
-	# Assign each category to a fold
-	df['fold'] = df.apply(lambda row: df['fold'] % k_folds)
+	# Verify that each syntax structure appears in exactly one fold
+	_assert_unique_to_fold(df, 'syntax')
+
+	# Show the number of unique annotators per fold
+	print('Unique annotators per fold:')
+	print(df.groupby('fold')['participant'].nunique())
 
 	return df
 
@@ -261,6 +301,18 @@ def generate_annotator_splits(df, k_folds=5):
 	So the splits can end up being rather uneven.
 	"""
 	df['fold'] = df.apply(lambda row: row.participant % k_folds, axis=1)
+
+	# Verify that each annotator appears in exactly one fold
+	_assert_unique_to_fold(df, 'participant')
+
+	# Show the number of items per fold
+	print('Items per fold:')
+	print(df.groupby('fold')['participant'].count())
+
+	# Show the number of annotators per fold
+	print('Unique annotators per fold:')
+	print(df.groupby('fold')['participant'].nunique())
+
 	return df
 
 def generate_splits(df, split_type, k_folds=5, datatype=None):
@@ -275,3 +327,21 @@ def generate_splits(df, split_type, k_folds=5, datatype=None):
 	else:
 	    raise ValueError(f'Unknown split type {split_type}')
 	return df
+
+def _assert_each_value_in_each_fold(df, col):
+	"""Verifies that each value of a certain column appears in each fold
+
+	Assumes fold column 'fold' and participant column 'participant'.
+	"""
+
+	# All participants and all folds
+	all_values = set(df[col])
+	all_folds = set(df.fold)
+
+	for num_values_in_fold in df.groupby('fold')[col].nunique():
+		assert num_values_in_fold == len(all_values), \
+			f'some values are not in all folds'
+
+def _assert_unique_to_fold(df, groupby):
+	assert df.groupby(groupby)['fold'].nunique().max() == 1,\
+		f'distinct "{groupby}" values span multiple folds'
