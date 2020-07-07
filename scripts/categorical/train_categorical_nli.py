@@ -36,10 +36,14 @@ def main(args):
             # Initialize the model
             LOG.info('Initializing categorical NLI model with the following hyperparameters:')
             LOG.info(json.dumps(hyperparams, indent=4))
-            if settings['use_random_slopes']:
+
+            # Only the random intercepts models have been modified to handle
+            # the standard setting in addition to the extended one.
+            if hyperparams['setting'] == 'extended' and settings['use_random_slopes']:
                 cnli_trainer = CategoricalRandomSlopesTrainer(**hyperparams)
             else:
                 cnli_trainer = CategoricalRandomInterceptsTrainer(**hyperparams)
+                
             LOG.info('...Complete')
 
             # Run the model
@@ -54,8 +58,9 @@ def main(args):
                 # Assign folds to each veridicality example
                 k_folds = settings['k_folds']
                 split_type = settings['split_type']
+                setting = hyperparams['setting']
                 ver = generate_splits(ver, split_type, k_folds=k_folds, datatype='v')
-                LOG.info(f'Beginning training with {k_folds}-fold cross-validation')
+                LOG.info(f'Beginning training with {k_folds}-fold cross-validation in the {setting} setting, partitioning based on {split_type}.')
 
                 # Perform k-fold cross-validation
                 loss_all = []
@@ -69,8 +74,7 @@ def main(args):
                     test_data = ver[~ver.fold.isin(train_folds)]
 
                     # Fit the model on the train folds
-                    # cat_model = cnli_trainer.fit(data=train_data, **trainparams)
-                    cat_model = cnli_trainer.nli
+                    cat_model = cnli_trainer.fit(data=train_data, **trainparams)
                     LOG.info('Finished training.')
 
                     # Evaluate the model on the test fold

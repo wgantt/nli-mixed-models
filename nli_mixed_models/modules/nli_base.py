@@ -10,7 +10,7 @@ from fairseq.data.data_utils import collate_tokens
 class NaturalLanguageInference(Module):
     
     def __init__(self, embedding_dim: int, n_predictor_layers: int,  
-                 output_dim: int, n_participants: int,
+                 output_dim: int, n_participants: int, setting: str,
                  device=torch.device('cpu')):
         super().__init__()
         
@@ -20,6 +20,7 @@ class NaturalLanguageInference(Module):
         self.n_predictor_layers = n_predictor_layers
         self.output_dim = output_dim
         self.n_participants = n_participants
+        self.setting = setting
         self.device = device
 
 

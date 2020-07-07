@@ -13,10 +13,10 @@ from .nli_base import NaturalLanguageInference
 class RandomInterceptsModel(NaturalLanguageInference):
 
     def __init__(self, embedding_dim: int, n_predictor_layers: int,  
-                 output_dim: int, n_participants: int,
+                 output_dim: int, n_participants: int, setting: str,
                  device=torch.device('cpu')):
         super().__init__(embedding_dim, n_predictor_layers, output_dim,
-                         n_participants, device)
+                         n_participants, setting, device)
 
         self.predictor = self._initialize_predictor()
         self.random_effects = Parameter(self._initialize_random_effects())
@@ -58,7 +58,7 @@ class RandomInterceptsModel(NaturalLanguageInference):
         
         # The "standard" setting, where we do not have access to annotator
         # information and thus do not have random effects.
-        if participant is None:
+        if self.setting == 'standard' or participant is None:
             random = None
             random_loss = 0.
         # The "extended" setting, where we have annotator random effects.
@@ -89,8 +89,11 @@ class CategoricalRandomIntercepts(RandomInterceptsModel):
 
     def _link_function(self, fixed, random, participant):
         """Computes the link function for a given model configuration."""
-        return fixed + random[participant] if random is not None else fixed
-    
+        if self.setting == 'standard' or random is None:
+            return fixed
+        else:
+            return fixed + random[participant]
+
 
     def _random_loss(self, random):
         """Compute loss over random effect priors."""
@@ -110,7 +113,6 @@ class CategoricalRandomIntercepts(RandomInterceptsModel):
         # return -torch.mean(MultivariateNormal(mean, cov).log_prob(random)[None,:])
 
 
-
 class UnitRandomInterceptsNormal(RandomInterceptsModel):
     """Aaron's original implementation of the Unit NLI model"""
 
@@ -125,7 +127,7 @@ class UnitRandomInterceptsNormal(RandomInterceptsModel):
     
 
     def _link_function(self, fixed, random, participant):
-        if random is None:
+        if self.setting == 'standard' or random is None:
             return torch.square(self.random_effects[:,0]).mean()*fixed.squeeze(1)
         else:
             random_scale, random_shift = random
@@ -157,13 +159,26 @@ class UnitRandomInterceptsBeta(RandomInterceptsModel):
         return random_shift, random_variance
 
     def _link_function(self, fixed, random, participant):
-        if random is None:
-            # TODO: Handle case where there's no random component. Not sure
-            # what the right thing to do here is; the link function in
-            # UnitRandomInterceptsNormal uses the mean of the random scaling
-            # terms to scale the fixed effect. Since we're not using a random
-            # scaling term here, I'm unsure what to do
-            raise NotImplementedError()
+        # Standard setting
+        if self.setting == 'standard' or random is None:
+
+            # Even in the standard setting, these will have been
+            # initialized.
+            random_shift, random_variance = self._random_effects()
+
+            # In the standard setting, we use the mean of the random shift
+            # terms to determine the mean of the beta distribution (as opposed
+            # to the particular shift terms for a given participant).
+            mean = self.squashing_function(fixed + random_shift.mean(0))
+
+            # Parameter estimates for the beta distribution. As for the
+            # random shift term above, we take the mean random variance
+            # across all annotators.
+            variance = torch.abs(random_variance.mean(0))
+            alpha = mean * variance
+            beta = (1 - mean) * variance
+
+        # Extended setting    
         else:
             random_shift, random_variance = random
 
@@ -177,9 +192,9 @@ class UnitRandomInterceptsBeta(RandomInterceptsModel):
             alpha = mean * torch.abs(random_variance[participant])
             beta = (1 - mean) * torch.abs(random_variance[participant])
 
-            # The prediction is just the expected value for the beta
-            # distribution whose parameters we've just estimated.
-            return alpha / (alpha + beta)
+        # The prediction is just the expected value for the beta
+        # distribution whose parameters we've just estimated.
+        return alpha / (alpha + beta)
 
     def _random_loss(self, random):
         # For the random loss, we jointly model both random effects components,

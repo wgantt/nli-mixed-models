@@ -12,10 +12,10 @@ from .nli_base import NaturalLanguageInference
 class RandomSlopesModel(NaturalLanguageInference):
 
     def __init__(self, embedding_dim: int, n_predictor_layers: int,  
-                 output_dim: int, n_participants: int,
+                 output_dim: int, n_participants: int, setting: str,
                  device=torch.device('cpu')):
         super().__init__(embedding_dim, n_predictor_layers, output_dim,
-                         n_participants, device)
+                         n_participants, setting, device)
         
         self.predictor_base, self.predictor_heads = self._initialize_predictor(self.n_participants)
         self.random_effects = Parameter(self._initialize_random_effects())
@@ -67,20 +67,17 @@ class RandomSlopesModel(NaturalLanguageInference):
         for p, e in zip(participant, embeddings):
             predictions.append(self.predictor_heads[p](self.predictor_base(e.mean(0))))
 
-        fixed = torch.stack(predictions, dim=0)
-
-        # The annotator MLPs contain the random slopes and intercepts, which are
-        # used to generate the predictions above. So no separate term here to use
-        # in the link function.
-        random = None
+        # 'fixed' is obviously something of a misnomer here, given that it's
+        # just computed from the separate annotator MLPs. 
+        predictions = torch.stack(predictions, dim=0)
 
         # There is, however, still a random loss, which is just the prior over
         # the (flattened) weights and biases of the MLPs.
         random_loss = self._random_loss(self._random_effects())
-            
-        
-        prediction = self._link_function(fixed, random, participant)
-        return prediction, random_loss
+
+        # Return the prediction and the random loss
+        predictions = self._link_function(predictions)
+        return predictions, random_loss
 
 
 
@@ -88,12 +85,14 @@ class CategoricalRandomSlopes(RandomSlopesModel):
 
     def _initialize_random_effects(self):
         """Initializes random effects as the MLP parameters."""
+
         # shape = n_participants x len(flattened MLP weights + biases)
         return self._extract_random_slopes_params()
     
 
     def _random_effects(self):
         """Returns the mean-subtracted random effects of the model."""
+
         # Even in the random slopes case, I don't think it matters
         # whether we mean subtract or not here, since this is just used
         # to compute loss (and not to actually scale the fixed term, as
@@ -101,16 +100,18 @@ class CategoricalRandomSlopes(RandomSlopesModel):
         return self.random_effects - self.random_effects.mean(0)[None,:]
     
 
-    def _link_function(self, fixed, random, participant):
+    def _link_function(self, predictions):
         """Computes the link function for a given model configuration."""
-        # 'fixed' contains the outputs from the individual annotator MLPs,
+
+        # 'predictions' contains the outputs from the individual annotator MLPs,
         # which have the random slopes and intercepts embedeed within them,
-        # so there's no separate random component.
-        return fixed
+        # so there are no separate 'random' and 'fixed' components.
+        return predictions
     
 
     def _random_loss(self, random):
         """Compute loss over random effect priors."""
+
         # TODO: decide whether to compute loss over all annotators at each iteration,
         # or only over a subset. Currently random loss is computed over ALL annotators
         # at each iteration. TBD whether this makes a difference or not. Regardless,
@@ -118,7 +119,6 @@ class CategoricalRandomSlopes(RandomSlopesModel):
         mean = torch.zeros(random.shape[1])
         cov = torch.matmul(torch.transpose(random, 1, 0), random) / (self.n_participants - 1)
         invcov = torch.inverse(cov)
-        print(random.unsqueeze(1).shape)
         return torch.matmul(torch.matmul(random.unsqueeze(1), invcov), \
                             torch.transpose(random.unsqueeze(1), 1, 2)).mean(0)
 
@@ -134,8 +134,8 @@ class UnitRandomSlopes(RandomSlopesModel):
         return self.random_effects - self.random_effects.mean(0)[None,:]
     
 
-    def _link_function(self, fixed, random, participant):
-        return fixed.squeeze(1)
+    def _link_function(self, predictions):
+        return predictions.squeeze(1)
     
 
     def _random_loss(self, random):

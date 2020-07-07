@@ -27,15 +27,18 @@ class NaturalLanguageInferenceTrainer:
     def __init__(self, n_participants: int, 
                  embedding_dim: int = 768, 
                  n_predictor_layers: int = 2,
+                 setting: str = 'extended',
                  device=torch.device('cpu')):
         self.embedding_dim = embedding_dim
         self.n_predictor_layers = n_predictor_layers
         self.n_participants = n_participants
+        self.setting = setting
         self.device = device
         self.nli = self.MODEL_CLASS(embedding_dim, 
                                     n_predictor_layers,
                                     self.OUTPUT_DIM, 
                                     n_participants,
+                                    setting,
                                     device)
         self.data_type = 'categorical' if \
             self.MODEL_CLASS is CategoricalRandomIntercepts or \
@@ -66,7 +69,12 @@ class NaturalLanguageInferenceTrainer:
             for batch, items in data.groupby('batch_idx'):
                 self.nli.zero_grad()
                 
-                participant = torch.LongTensor(items.participant.values).to(self.device)
+                # Only in the extended setting do we need participant information
+                if self.setting == 'extended':
+                    participant = torch.LongTensor(items.participant.values).to(self.device)
+                else:
+                    participant = None
+
                 target = self.TARGET_TYPE(items.target.values)
                 
                 embedding = self.nli.embed(items)
