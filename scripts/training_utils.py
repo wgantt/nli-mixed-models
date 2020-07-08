@@ -1,3 +1,4 @@
+import os, uuid, torch, inspect
 import numpy as np
 import pandas as pd
 
@@ -14,9 +15,6 @@ LOG = setup_logging()
 
 """
 TODO: Add functions for saving models
-
-Also: It would be faster to load the data from the data/ directory
-      instead of pulling it off the web, so we should probably fix that.
 """
 
 def parameter_grid(param_dict):
@@ -33,6 +31,37 @@ def parameter_grid(param_dict):
 			raise ValueError(errmsg)
 	for configuration in product(*vlists):
 		yield dict(zip(ks, configuration))
+
+# Functions below for saving and loading models arae taken directly from
+# torch-combinatorial
+
+def save_model(data_dict, ckpt_dir, file_name):
+	# Not sure why Aaron and Gene were using random
+	# hashing to name their model files. Absent more information,
+	# more descriptive file names seem preferable. -- W.G.
+	# 
+	# rand_hash = uuid.uuid4().hex
+	if not os.path.isdir(ckpt_dir):
+		os.makedirs(ckpt_dir)
+	ckpt_path = os.path.join(ckpt_dir, file_name)
+	torch.save(data_dict, ckpt_path)
+	return ckpt_path
+
+def save_model_with_args(params, model, initargs, ckpt_dir, file_name):
+    filtered_args = {}
+    for p in inspect.signature(model.__class__.__init__).parameters:
+        if p in initargs:
+            filtered_args[p] = initargs[p]
+    ckpt_dict = dict(params, **{'state_dict': model.state_dict(),
+                                'curr_hyper': filtered_args})
+    return save_model(ckpt_dict, ckpt_dir, file_name)
+
+def load_model_with_args(cls, ckpt_path):
+    ckpt_dict = torch.load(ckpt_path)
+    hyper_params = ckpt_dict['curr_hyper']
+    model = cls(**hyper_params)
+    model.load_state_dict(ckpt_dict['state_dict'])
+    return model, hyper_params
 
 def load_veridicality():
 

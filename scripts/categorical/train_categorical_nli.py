@@ -9,7 +9,8 @@ from scripts.setup_logging import setup_logging
 from scripts.training_utils import (
     parameter_grid,
     load_veridicality,
-    generate_splits
+    generate_splits,
+    save_model_with_args,
     )
 from scripts.eval_utils import (
     eval_model
@@ -24,6 +25,10 @@ def main(args):
         params = json.load(f)
 
     settings = params['settings']
+    checkpoints = params['checkpoints']
+    save_checkpoints = checkpoints['save_ckpts']
+    checkpoint_dir = checkpoints['ckpt_dir'] 
+    checkpoint_file_name = checkpoints['ckpt_file_name']
 
     for hyperparams in parameter_grid(params['hyper']):
         for trainparams in parameter_grid(params['training']):
@@ -80,6 +85,12 @@ def main(args):
                     cat_model = cnli_trainer.fit(data=train_data, **trainparams)
                     LOG.info('Finished training.')
 
+                    # Save the model
+                    if save_checkpoints:
+                        LOG.info('Saving model...')
+                        save_model_with_args(params, cat_model, hyperparams, checkpoint_dir, checkpoint_file_name + '-fold-' + str(i))
+                        LOG.info('Model saved.')
+
                     # Evaluate the model on the test fold
                     loss_mean, acc_mean, best_mean = eval_model(test_data, cat_model, 'categorical', trainparams['batch_size'])
                     loss_all.append(loss_mean)
@@ -102,11 +113,6 @@ if __name__ == '__main__':
                         type=str,
                         default='scripts/categorical/train_categorical_nli.json',
                         help='Path to a JSON containing parameters to sweep')
-    # Currently will have no effect
-    parser.add_argument('--checkpoints',
-                        type=str,
-                        default='checkpoints/',
-                        help='Where to save the models to')
     parser.add_argument('--debug',
                     action='store_true',
                     help='If provided, runs training on a small subset of'\

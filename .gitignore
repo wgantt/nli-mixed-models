@@ -7,6 +7,7 @@
 *.pyc
 *.egg-info
 *.icloud
+*checkpoints/
 build/
 dist/
 env/

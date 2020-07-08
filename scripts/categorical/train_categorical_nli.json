@@ -1,5 +1,9 @@
 {
-  "ckpt_path":[null],
+  "checkpoints":{
+    "ckpt_dir":"scripts/categorical/checkpoints/",
+    "ckpt_file_name":"categorical",
+    "save_ckpts":true
+  },
   "hyper":{
     "embedding_dim":[768],
     "n_predictor_layers":[1],
