@@ -3,7 +3,8 @@
   "hyper":{
     "embedding_dim":[768],
     "n_predictor_layers":[1],
-    "setting":["extended"]
+    "setting":["extended"],
+    "device":["cpu"]
   },
   "training":{
     "n_epochs":[25],
@@ -14,7 +15,7 @@
   "settings":{
     "use_random_slopes":false,
     "use_beta_distribution":true,
-    "split_type":"syntax",
+    "split_type":"random",
     "k_folds":5
   }
 }

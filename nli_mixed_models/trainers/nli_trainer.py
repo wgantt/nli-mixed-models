@@ -28,12 +28,12 @@ class NaturalLanguageInferenceTrainer:
                  embedding_dim: int = 768, 
                  n_predictor_layers: int = 2,
                  setting: str = 'extended',
-                 device=torch.device('cpu')):
+                 device='cpu'):
         self.embedding_dim = embedding_dim
         self.n_predictor_layers = n_predictor_layers
         self.n_participants = n_participants
         self.setting = setting
-        self.device = device
+        self.device = torch.device(device)
         self.nli = self.MODEL_CLASS(embedding_dim, 
                                     n_predictor_layers,
                                     self.OUTPUT_DIM, 
