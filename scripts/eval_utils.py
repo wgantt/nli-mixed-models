@@ -1,10 +1,14 @@
 import torch
+import logging
 import numpy as np
 import pandas as pd
 
 from itertools import product
 from pandas.api.types import CategoricalDtype
 from torch.nn import CrossEntropyLoss, BCEWithLogitsLoss
+from .setup_logging import setup_logging
+
+LOG = setup_logging()
 
 def eval_model(data: pd.DataFrame, model, data_type, batch_size: int = 32):
   """Evaluates a trained model on a test set, using a given batch size. data_type
@@ -31,7 +35,7 @@ def eval_model(data: pd.DataFrame, model, data_type, batch_size: int = 32):
   best_trace = []
 
   for batch, items in data.groupby('batch_idx'):
-    print('evaluating batch [%s/%s]' % (int(batch), int(n_batches)))
+    LOG.info('evaluating batch [%s/%s]' % (int(batch), int(n_batches)))
 
     participant = torch.LongTensor(items.participant.values)
     target = torch.LongTensor(items.target.values) if data_type == 'categorical' else \

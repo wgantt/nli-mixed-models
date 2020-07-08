@@ -1,4 +1,5 @@
 import argparse, json, torch
+import numpy as np
 
 from nli_mixed_models.trainers.nli_trainer import (
     UnitRandomInterceptsNormalTrainer,
@@ -50,8 +51,8 @@ def main(args):
             LOG.info('...Complete')
 
             # Run the model
-            # Using 'know' and 'think' just for debugging purposes; actual training
-            # will run on all verbs
+            # Using 'know' and 'think' just for debugging purposes;
+            # actual training runs on all verbs
             if args.debug:
                 LOG.info('Beginning training in debug mode...')
                 unit_model = unli_trainer.fit(data=neg[neg.verb.isin(['know', 'think'])],\
@@ -66,6 +67,9 @@ def main(args):
                 LOG.info(f'Beginning training with {k_folds}-fold cross-validation in the {setting} setting, partitioning based on {split_type}.')
 
                 # Perform k-fold cross-validation
+                loss_all = []
+                error_all = []
+                best_all = []
                 for i in range(k_folds):
 
                     # Select the folds
@@ -74,14 +78,24 @@ def main(args):
                     test_data = neg[~neg.fold.isin(train_folds)]
 
                     # Fit the model on the train folds
-                    cat_model = unli_trainer.fit(data=train_data, **trainparams)
-                    # cat_model = unli_trainer.nli
+                    unit_model = unli_trainer.fit(data=train_data, **trainparams)
                     LOG.info('Finished training.')
 
                     # Evaluate the model on the test fold
-                    # TODO: write eval function
+                    loss_mean, error_mean, best_mean = eval_model(test_data, unit_model, 'unit', trainparams['batch_size'])
+                    loss_all.append(loss_mean)
+                    error_all.append(error_mean)
+                    best_all.append(best_mean)
+                    LOG.info(f'Test results for fold {i}')
+                    LOG.info(f'Mean loss:           {loss_mean}')
+                    LOG.info(f'Mean error:       {error_mean}')
+                    LOG.info(f'Prop. best possible: {best_mean}')
 
-            
+                LOG.info('Finished k-fold cross evaluation.')
+                LOG.info(f'Mean error:           {np.round(np.mean(loss_all), 2)}')
+                LOG.info(f'Mean error:       {np.round(np.mean(error_all), 2)}')
+                LOG.info(f'Prop. best possible: {np.round(np.mean(best_all), 2)}')
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train a unit NLI mixed effects model')

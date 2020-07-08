@@ -1,4 +1,5 @@
 import torch
+import logging
 import numpy as np
 import pandas as pd
 
@@ -9,6 +10,7 @@ from ..modules.nli_random_intercepts import (
     UnitRandomInterceptsBeta,
     CategoricalRandomIntercepts
 )
+from scripts.setup_logging import setup_logging
 from ..modules.nli_random_slopes import (
     UnitRandomSlopes,
     CategoricalRandomSlopes
@@ -19,6 +21,8 @@ from scripts.eval_utils import (
     accuracy_best,
     absolute_error_best
 )
+
+LOG = setup_logging()
 
 class NaturalLanguageInferenceTrainer:
     # TODO: This could probably be made a bit neater by abstracting
@@ -55,6 +59,8 @@ class NaturalLanguageInferenceTrainer:
         self.nli.train()
         
         n_batches = np.ceil(data.shape[0]/batch_size)
+        
+        LOG.info(f'Training for {n_epochs} epochs, with {n_batches} batches per epoch (batch size={batch_size})')
         
         for epoch in range(n_epochs):
 
@@ -102,17 +108,17 @@ class NaturalLanguageInferenceTrainer:
                     best_trace.append(1 - (error-best)/best)
                 
                 if not (batch % verbosity):
-                    print('epoch:              ', int(epoch))
-                    print('batch:              ', int(batch))
-                    print('mean loss:          ', np.round(np.mean(loss_trace), 2))
+                    LOG.info(f'epoch:               {int(epoch)}')
+                    LOG.info(f'batch:               {int(batch)}')
+                    LOG.info(f'mean loss:           {np.round(np.mean(loss_trace), 2)}')
                     if self.data_type == 'categorical':
-                        print('mean acc.:          ', np.round(np.mean(metric_trace), 2))
+                        LOG.info(f'mean acc.:           {np.round(np.mean(metric_trace), 2)}')
                     elif self.data_type == 'unit':
-                        print('mean error:          ', np.round(np.mean(metric_trace), 2))
-                    print('prop. best possible:', np.round(np.mean(best_trace), 2))
-                    print()
+                        LOG.info(f'mean error:          {np.round(np.mean(metric_trace), 2)}')
+                    LOG.info(f'prop. best possible: {np.round(np.mean(best_trace), 2)}')
+                    LOG.info('')
                     
-                    print()
+                    LOG.info('')
 
                     loss_trace = []
                     metric_trace = []

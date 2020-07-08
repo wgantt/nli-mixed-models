@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+from .setup_logging import setup_logging
 from itertools import product
 from pandas.api.types import CategoricalDtype
 
@@ -8,6 +9,8 @@ URL_PREFIX = 'http://megaattitude.io/projects/'
 VERIDICALITY_URL = URL_PREFIX + 'mega-veridicality/mega-veridicality-v2/mega-veridicality-v2.csv'
 NEG_RAISING_URL = URL_PREFIX + 'mega-negraising/mega-negraising-v1/mega-negraising-v1.tsv'
 ACCEPTABILITY_URL = URL_PREFIX + 'mega-acceptability/mega-acceptability-v2/mega-acceptability-v2.tsv'
+
+LOG = setup_logging()
 
 """
 TODO: Add functions for saving models
@@ -216,12 +219,12 @@ def generate_random_splits(df, k_folds=5):
 	_assert_each_value_in_each_fold(df, 'participant')
 
 	# Show how many items are in each fold
-	print('Items per fold:')
-	print(df.groupby('fold')['participant'].count())
+	LOG.info('Items per fold:')
+	LOG.info(f"{df.groupby('fold')['participant'].count()}")
 
 	# Show how many annotators are in each fold
-	print('Unique annotators per fold:')
-	print(df.groupby('fold')['participant'].nunique())
+	LOG.info('Unique annotators per fold:')
+	LOG.info(f"{df.groupby('fold')['participant'].nunique()}")
 
 	return df
 

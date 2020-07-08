@@ -1,4 +1,5 @@
 import argparse, json, torch
+import numpy as np
 
 from nli_mixed_models.trainers.nli_trainer import (
     CategoricalRandomInterceptsTrainer,
@@ -45,6 +46,8 @@ def main(args):
                 cnli_trainer = CategoricalRandomInterceptsTrainer(**hyperparams)
                 
             LOG.info('...Complete')
+            device = hyperparams['device']
+            LOG.info(f'Using device {device}')
 
             # Run the model
             # Using 'know' and 'think' just for testing purposes; actual training should
@@ -78,20 +81,19 @@ def main(args):
                     LOG.info('Finished training.')
 
                     # Evaluate the model on the test fold
-                    # TODO: the following should probably be refactored later
                     loss_mean, acc_mean, best_mean = eval_model(test_data, cat_model, 'categorical', trainparams['batch_size'])
                     loss_all.append(loss_mean)
                     acc_all.append(acc_mean)
                     best_all.append(best_mean)
-                    print('Test results for fold ', i)
-                    print('Mean loss:           ', loss_mean)
-                    print('Mean accuracy:       ', acc_mean)
-                    print('Prop. best possible: ', best_mean)
+                    LOG.info(f'Test results for fold {i}')
+                    LOG.info(f'Mean loss:           {loss_mean}')
+                    LOG.info(f'Mean accuracy:       {acc_mean}')
+                    LOG.info(f'Prop. best possible: {best_mean}')
 
                 LOG.info('Finished k-fold cross evaluation.')
-                print('Mean loss:           ', np.round(np.mean(loss_all), 2))
-                print('Mean accuracy:       ', np.round(np.mean(acc_all), 2))
-                print('Prop. best possible: ', np.round(np.mean(best_all), 2))
+                LOG.info(f'Mean loss:           {np.round(np.mean(loss_all), 2)}')
+                LOG.info(f'Mean accuracy:       {np.round(np.mean(acc_all), 2)}')
+                LOG.info(f'Prop. best possible: {np.round(np.mean(best_all), 2)}')
 
 
 if __name__ == '__main__':
