@@ -4,8 +4,6 @@ import pandas as pd
 from typing import Tuple
 from torch import cat, flatten, sigmoid
 from torch.nn import Module, ModuleList, Linear, ReLU, Sequential, Dropout, Parameter
-from torch.distributions.multivariate_normal import MultivariateNormal
-from torch.distributions import Beta
 from fairseq.data.data_utils import collate_tokens
 
 from .nli_base import NaturalLanguageInference
@@ -107,11 +105,6 @@ class CategoricalRandomIntercepts(RandomInterceptsModel):
         return torch.matmul(torch.matmul(random.unsqueeze(1), invcov), \
                             torch.transpose(random.unsqueeze(1), 1, 2)).mean(0)
 
-        # Strangely, computing the loss this way results in its being variable
-        # where it should be constant. For this reason, we compute the unnormalized
-        # PDF directly.
-        # return -torch.mean(MultivariateNormal(mean, cov).log_prob(random)[None,:])
-
 
 class UnitRandomInterceptsNormal(RandomInterceptsModel):
     """Aaron's original implementation of the Unit NLI model"""
@@ -194,7 +187,7 @@ class UnitRandomInterceptsBeta(RandomInterceptsModel):
 
         # The prediction is just the expected value for the beta
         # distribution whose parameters we've just estimated.
-        return alpha / (alpha + beta)
+        return alpha, beta, alpha / (alpha + beta)
 
     def _random_loss(self, random):
         # For the random loss, we jointly model both random effects components,
@@ -208,4 +201,21 @@ class UnitRandomInterceptsBeta(RandomInterceptsModel):
         invcov = torch.inverse(cov)
         return torch.matmul(torch.matmul(combined.unsqueeze(1), invcov), \
                             torch.transpose(combined.unsqueeze(1), 1, 2)).mean(0)
+
+
+    def forward(self, embeddings, participant=None) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Need to override forward function in order to return alpha and beta,
+           which are used to compute the log likelihood of the observed values
+        """
+        fixed = self.predictor(embeddings.mean(1))
+        
+        if self.setting == 'standard' or participant is None:
+            random = None
+            random_loss = 0.
+        else:
+            random = self._random_effects()
+            random_loss = self._random_loss(random)
+        
+        alpha, beta, prediction = self._link_function(fixed, random, participant)
+        return alpha, beta, prediction, random_loss
 

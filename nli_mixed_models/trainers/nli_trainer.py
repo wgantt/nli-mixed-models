@@ -21,6 +21,7 @@ from scripts.eval_utils import (
     accuracy_best,
     absolute_error_best
 )
+from torch.distributions import Beta
 
 LOG = setup_logging()
 
@@ -85,9 +86,12 @@ class NaturalLanguageInferenceTrainer:
                 
                 embedding = self.nli.embed(items)
                 
-                prediction, random_loss = self.nli(embedding, participant)
-            
-                fixed_loss = lossfunc(prediction, target)
+                if self.MODEL_CLASS == UnitRandomInterceptsBeta:
+                    alpha, beta, prediction, random_loss = self.nli(embedding, participant)
+                    fixed_loss = lossfunc(alpha, beta, target)
+                else:
+                    prediction, random_loss = self.nli(embedding, participant)
+                    fixed_loss = lossfunc(prediction, target)
                 
                 loss = fixed_loss + random_loss
                 
@@ -137,8 +141,16 @@ class UnitTrainer(NaturalLanguageInferenceTrainer):
 class UnitRandomInterceptsNormalTrainer(UnitTrainer):
     MODEL_CLASS = UnitRandomInterceptsNormal
 
+class BetaLogProbLoss(torch.nn.Module):
+    def __init__(self):
+        super(BetaLogProbLoss,self).__init__()
+
+    def forward(self, alphas, betas, targets):
+        return -torch.mean(Beta(alphas, betas).log_prob(targets))
+
 class UnitRandomInterceptsBetaTrainer(UnitTrainer):
     MODEL_CLASS = UnitRandomInterceptsBeta
+    LOSS_CLASS = BetaLogProbLoss
 
 class UnitRandomSlopesTrainer(UnitTrainer):
     MODEL_CLASS = UnitRandomSlopes
