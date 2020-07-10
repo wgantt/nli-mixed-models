@@ -17,10 +17,8 @@ class RandomInterceptsModel(NaturalLanguageInference):
                          n_participants, setting, device)
 
         self.predictor = self._initialize_predictor()
-        self.random_effects = Parameter(self._initialize_random_effects())
-
-        # TODO: make this configurable
-        self.squashing_function = sigmoid
+        if self.setting == 'extended':
+            self.random_effects = Parameter(self._initialize_random_effects())
 
     
     def _initialize_predictor(self):
@@ -137,6 +135,17 @@ class UnitRandomInterceptsNormal(RandomInterceptsModel):
 
 class UnitRandomInterceptsBeta(RandomInterceptsModel):
 
+    def __init__(self, embedding_dim: int, n_predictor_layers: int,  
+                 output_dim: int, n_participants: int, setting: str,
+                 device=torch.device('cpu')):
+        super().__init__(embedding_dim, n_predictor_layers, output_dim,
+                         n_participants, setting, device=device)
+
+        # The squashing function to bound continuous outputs to [0,1]
+        self.squashing_function = sigmoid
+        if self.setting == 'standard':
+            self.standard_variance = Parameter(torch.tensor([1.]))
+            self.standard_shift = Parameter(torch.tensor([0.]))
 
     def _initialize_random_effects(self):
         # For the beta distribution, the random effects are:
@@ -155,19 +164,14 @@ class UnitRandomInterceptsBeta(RandomInterceptsModel):
         # Standard setting
         if self.setting == 'standard' or random is None:
 
-            # Even in the standard setting, these will have been
-            # initialized.
-            random_shift, random_variance = self._random_effects()
+            # Fixed shift term is initialized to 0 in the standard setting,
+            # but obviously will vary somewhat during training
+            mean = self.squashing_function(fixed + self.standard_shift).squeeze(1)
 
-            # In the standard setting, we use the mean of the random shift
-            # terms to determine the mean of the beta distribution (as opposed
-            # to the particular shift terms for a given participant).
-            mean = self.squashing_function(fixed + random_shift.mean(0))
-
-            # Parameter estimates for the beta distribution. As for the
-            # random shift term above, we take the mean random variance
-            # across all annotators.
-            variance = torch.abs(random_variance.mean(0))
+            # Parameter estimates for the beta distribution. The variance
+            # in the standard setting is initialized to 1, but may vary as
+            # with the shifting term
+            variance = torch.abs(self.standard_variance)
             alpha = mean * variance
             beta = (1 - mean) * variance
 
