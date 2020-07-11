@@ -133,6 +133,25 @@ class NaturalLanguageInferenceTrainer:
                 
         return self.nli.eval()
 
+
+# Custom loss functions
+class BetaLogProbLoss(torch.nn.Module):
+    def __init__(self):
+        super(BetaLogProbLoss,self).__init__()
+
+    def forward(self, alphas, betas, targets):
+        # Added this to adjust targets to constrain them within soft interval (0, 1) - B.K.
+        eps = torch.tensor(0.000001)
+        zero_idx = (targets == 0).nonzero()
+        one_idx = (targets == 1).nonzero()
+        targets_adj = targets.clone()
+        targets_adj[zero_idx] += eps
+        targets_adj[one_idx] -= eps
+        # Return log probability of beta distribution (using adjusted targets)
+        return -torch.mean(Beta(alphas, betas).log_prob(targets_adj))
+
+
+# Unit models
 class UnitTrainer(NaturalLanguageInferenceTrainer):
     LOSS_CLASS = BCEWithLogitsLoss
     TARGET_TYPE = torch.FloatTensor
@@ -141,13 +160,6 @@ class UnitTrainer(NaturalLanguageInferenceTrainer):
 class UnitRandomInterceptsNormalTrainer(UnitTrainer):
     MODEL_CLASS = UnitRandomInterceptsNormal
 
-class BetaLogProbLoss(torch.nn.Module):
-    def __init__(self):
-        super(BetaLogProbLoss,self).__init__()
-
-    def forward(self, alphas, betas, targets):
-        return -torch.mean(Beta(alphas, betas).log_prob(targets))
-
 class UnitRandomInterceptsBetaTrainer(UnitTrainer):
     MODEL_CLASS = UnitRandomInterceptsBeta
     LOSS_CLASS = BetaLogProbLoss
@@ -155,6 +167,8 @@ class UnitRandomInterceptsBetaTrainer(UnitTrainer):
 class UnitRandomSlopesTrainer(UnitTrainer):
     MODEL_CLASS = UnitRandomSlopes
 
+
+# Categorical models
 class CategoricalTrainer(NaturalLanguageInferenceTrainer):
     LOSS_CLASS = CrossEntropyLoss
     TARGET_TYPE = torch.LongTensor
