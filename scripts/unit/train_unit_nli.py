@@ -78,12 +78,15 @@ def main(args):
                 for i in range(k_folds):
 
                     # Select the folds
-                    train_folds = [j for j in range(k_folds) if j != i]
+                    test_fold = i
+                    train_folds = [j for j in range(k_folds) if j != test_fold]
+                    LOG.info(f'Beginning training with test fold={test_fold}.')
+
                     train_data = neg[neg.fold.isin(train_folds)]
-                    test_data = neg[~neg.fold.isin(train_folds)]
+                    test_data = neg[neg.fold == test_fold]
 
                     # Fit the model on the train folds
-                    unit_model = unli_trainer.fit(data=train_data, **trainparams)
+                    unit_model = unli_trainer.fit(train_data=train_data, **trainparams)
                     LOG.info('Finished training.')
 
                     # Save the model

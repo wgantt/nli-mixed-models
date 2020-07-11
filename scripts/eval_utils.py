@@ -7,6 +7,8 @@ from itertools import product
 from pandas.api.types import CategoricalDtype
 from torch.nn import CrossEntropyLoss, BCEWithLogitsLoss
 from .setup_logging import setup_logging
+from ...nli_mixed_models.modules.nli_random_intercepts import UnitRandomInterceptsBeta
+from ...nli_mixed_models.trainer.nli_trainer import BetaLogProbLoss
 
 LOG = setup_logging()
 
@@ -28,7 +30,12 @@ def eval_model(data: pd.DataFrame, model, data_type, batch_size: int = 32):
   n_batches = np.ceil(data.shape[0]/batch_size)
   data['batch_idx'] = np.repeat(np.arange(n_batches), batch_size)[:data.shape[0]]
 
-  lossfunc = CrossEntropyLoss() if data_type == 'categorical' else BCEWithLogitsLoss()
+  if data_type == 'categorical':
+    lossfunc = CrossEntropyLoss()
+  elif isinstance(model, UnitRandomInterceptsBeta):
+    lossfunc = BetaLogProbLoss()
+  else:
+    lossfunc = BCEWithLogitsLoss()
 
   loss_trace = []
   metric_trace = []
@@ -42,10 +49,14 @@ def eval_model(data: pd.DataFrame, model, data_type, batch_size: int = 32):
              torch.FloatTensor(items.target.values)
     embedding = model.embed(items)
 
-    prediction, random_loss = model(embedding, participant)
-    fixed_loss = lossfunc(prediction, target)
-    loss = fixed_loss + random_loss
+    if isinstance(model, UnitRandomInterceptsBeta):
+      alpha, beta, prediction, random_loss = model(embedding, participant)
+      fixed_loss = lossfunc(alpha, beta, target)       
+    else:
+      prediction, random_loss = model(embedding, participant)
+      fixed_loss = lossfunc(prediction, target)
 
+    loss = fixed_loss + random_loss
     loss_trace.append(loss.item())
                 
     if data_type == 'categorical':

@@ -77,12 +77,15 @@ def main(args):
                 for i in range(k_folds):
 
                     # Select the folds
-                    train_folds = [j for j in range(k_folds) if j != i]
+                    test_fold = i
+                    train_folds = [j for j in range(k_folds) if j != test_fold] 
+                    LOG.info(f'Beginning training with test fold={test_fold}.')
+
                     train_data = ver[ver.fold.isin(train_folds)]
-                    test_data = ver[~ver.fold.isin(train_folds)]
+                    test_data = ver[ver.fold == test_fold]
 
                     # Fit the model on the train folds
-                    cat_model = cnli_trainer.fit(data=train_data, **trainparams)
+                    cat_model = cnli_trainer.fit(train_data=train_data, **trainparams)
                     LOG.info('Finished training.')
 
                     # Save the model

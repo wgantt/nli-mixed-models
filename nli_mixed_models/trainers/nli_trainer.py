@@ -25,6 +25,11 @@ from torch.distributions import Beta
 
 LOG = setup_logging()
 
+# Ideally, these should be parameters of the trainer itself, but didn't
+# want to take the time to do the refactoring. -W.G.
+MOVING_AVERAGE_WINDOW_SIZE = 100
+TOLERANCE = 100
+
 class NaturalLanguageInferenceTrainer:
     # TODO: This could probably be made a bit neater by abstracting
     # the metric (i.e. accuracy/absolute error) into the subclasses
@@ -50,7 +55,7 @@ class NaturalLanguageInferenceTrainer:
             self.MODEL_CLASS is CategoricalRandomSlopes \
             else 'unit'
     
-    def fit(self, data: pd.DataFrame, batch_size: int = 32, 
+    def fit(self, train_data: pd.DataFrame, batch_size: int = 32, 
             n_epochs: int = 10, lr: float = 1e-2, verbosity: int = 10):
         
         optimizer = Adam(self.nli.parameters(),
@@ -59,21 +64,26 @@ class NaturalLanguageInferenceTrainer:
         
         self.nli.train()
         
-        n_batches = np.ceil(data.shape[0]/batch_size)
+        n_batches = int(np.ceil(train_data.shape[0]/batch_size))
         
-        LOG.info(f'Training for {n_epochs} epochs, with {n_batches} batches per epoch (batch size={batch_size})')
+        LOG.info(f'Training for a max of {n_epochs} epochs, with '\
+                 f'{n_batches} batches per epoch (batch size={batch_size})')
         
+        # For tracking a moving average of the loss across epochs for
+        # early stopping
+        all_loss_trace = []       
+        iters_without_improvement = 0
         for epoch in range(n_epochs):
 
-            data = data.sample(frac=1).reset_index(drop=True)
+            train_data = train_data.sample(frac=1).reset_index(drop=True)
 
-            data['batch_idx'] = np.repeat(np.arange(n_batches), batch_size)[:data.shape[0]]
+            train_data['batch_idx'] = np.repeat(np.arange(n_batches), batch_size)[:train_data.shape[0]]
             
             loss_trace = []
             metric_trace = []
             best_trace = []
             
-            for batch, items in data.groupby('batch_idx'):
+            for batch, items in train_data.groupby('batch_idx'):
                 self.nli.zero_grad()
                 
                 # Only in the extended setting do we need participant information
@@ -98,6 +108,7 @@ class NaturalLanguageInferenceTrainer:
                 # Shouldn't this include the random loss? -B.K.
                 # loss_trace.append(loss.item()-random_loss.item())
                 loss_trace.append(loss.item())
+                all_loss_trace.append(loss.item())
                 
                 if self.data_type == 'categorical':
                     acc = accuracy(prediction, target)
@@ -127,6 +138,25 @@ class NaturalLanguageInferenceTrainer:
                     loss_trace = []
                     metric_trace = []
                     best_trace = []
+
+                # Evaluate moving average loss
+                if len(all_loss_trace) == MOVING_AVERAGE_WINDOW_SIZE:
+                    prev_moving_average_loss = np.mean(all_loss_trace)
+                elif len(all_loss_trace) > MOVING_AVERAGE_WINDOW_SIZE:
+                    # Compute the moving average of the loss
+                    cur_moving_average_loss = \
+                        np.mean(all_loss_trace[-MOVING_AVERAGE_WINDOW_SIZE:])
+                    # Determine whether there was any improvement or not
+                    if cur_moving_average_loss >= prev_moving_average_loss:
+                        iters_without_improvement += 1
+                    else:
+                        prev_moving_average_loss = cur_moving_average_loss
+                        iters_without_improvement = 0
+                    # Early stopping condition
+                    if iters_without_improvement == TOLERANCE:
+                        LOG.info(f'Reached {TOLERANCE} minibatches without '\
+                                 f'improvement. Stopping early')
+                        return self.nli.eval()
                 
                 loss.backward()
                 optimizer.step()
