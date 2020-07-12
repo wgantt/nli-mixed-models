@@ -20,6 +20,7 @@
     "use_random_slopes":false,
     "use_beta_distribution":true,
     "split_type":"random",
-    "k_folds":5
+    "k_folds":5,
+    "subtask":"a"
   }
 }

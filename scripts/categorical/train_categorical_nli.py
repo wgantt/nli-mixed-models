@@ -5,15 +5,15 @@ from nli_mixed_models.trainers.nli_trainer import (
     CategoricalRandomInterceptsTrainer,
     CategoricalRandomSlopesTrainer
     )
+from nli_mixed_models.eval.nli_eval import (
+    CategoricalEval
+)
 from scripts.setup_logging import setup_logging
 from scripts.training_utils import (
     parameter_grid,
     load_veridicality,
     generate_splits,
     save_model_with_args,
-    )
-from scripts.eval_utils import (
-    eval_model
     )
 
 LOG = setup_logging()
@@ -70,6 +70,14 @@ def main(args):
                 ver = generate_splits(ver, split_type, k_folds=k_folds, datatype='v')
                 LOG.info(f'Beginning training with {k_folds}-fold cross-validation in the {setting} setting, partitioning based on {split_type}.')
 
+                # Determine which subtask can be used
+                if setting == 'standard':
+                    subtask = 'a'
+                elif split_type == 'participant':
+                    subtask = 'b'
+                else:
+                    subtask = settings['subtask']
+
                 # Perform k-fold cross-validation
                 loss_all = []
                 acc_all = []
@@ -95,7 +103,8 @@ def main(args):
                         LOG.info('Model saved.')
 
                     # Evaluate the model on the test fold
-                    loss_mean, acc_mean, best_mean = eval_model(test_data, cat_model, 'categorical', trainparams['batch_size'])
+                    cnli_eval = CategoricalEval(cat_model, subtask)
+                    loss_mean, acc_mean, best_mean = cnli_eval.eval(test_data, trainparams['batch_size'])
                     loss_all.append(loss_mean)
                     acc_all.append(acc_mean)
                     best_all.append(best_mean)

@@ -6,15 +6,16 @@ from nli_mixed_models.trainers.nli_trainer import (
     UnitRandomInterceptsBetaTrainer,
     UnitRandomSlopesTrainer
     )
+from nli_mixed_models.eval.nli_eval import (
+    UnitEval,
+    UnitBetaEval
+)
 from scripts.setup_logging import setup_logging
 from scripts.training_utils import (
     parameter_grid,
     load_neg_raising,
     generate_splits,
     save_model_with_args
-    )
-from scripts.eval_utils import (
-    eval_model
     )
 
 LOG = setup_logging()
@@ -71,6 +72,14 @@ def main(args):
                 neg = generate_splits(neg, split_type, k_folds=k_folds, datatype='n')
                 LOG.info(f'Beginning training with {k_folds}-fold cross-validation in the {setting} setting, partitioning based on {split_type}.')
 
+                # Determine which subtask can be used
+                if setting == 'standard':
+                    subtask = 'a'
+                elif split_type == 'participant':
+                    subtask = 'b'
+                else:
+                    subtask = settings['subtask']
+
                 # Perform k-fold cross-validation
                 loss_all = []
                 error_all = []
@@ -86,7 +95,8 @@ def main(args):
                     test_data = neg[neg.fold == test_fold]
 
                     # Fit the model on the train folds
-                    unit_model = unli_trainer.fit(train_data=train_data, **trainparams)
+                    # unit_model = unli_trainer.fit(train_data=train_data, **trainparams)
+                    unit_model = unli_trainer.nli
                     LOG.info('Finished training.')
 
                     # Save the model
@@ -96,7 +106,8 @@ def main(args):
                         LOG.info('Model saved.')
 
                     # Evaluate the model on the test fold
-                    loss_mean, error_mean, best_mean = eval_model(test_data, unit_model, 'unit', trainparams['batch_size'])
+                    unli_eval = UnitBetaEval(unit_model, subtask) if settings['use_beta_distribution'] else UnitEval(unit_model, subtask)
+                    loss_mean, error_mean, best_mean = unli_eval.eval(test_data, trainparams['batch_size'])
                     loss_all.append(loss_mean)
                     error_all.append(error_mean)
                     best_all.append(best_mean)
