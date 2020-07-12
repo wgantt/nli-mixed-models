@@ -41,9 +41,9 @@ class NaturalLanguageInferenceEval:
       self.nli.eval()
 
       if self.subtask == 'a':
-        return eval_subtask_a(test_data, batch_size)
+        return self.eval_subtask_a(test_data, batch_size)
       else:
-        return eval_subtask_b(test_data, batch_size)
+        return self.eval_subtask_b(test_data, batch_size)
 
       
     def eval_subtask_b(self, test_data: pd.DataFrame, batch_size: int = 32):
@@ -84,10 +84,10 @@ class NaturalLanguageInferenceEval:
           # Calculate model prediction and compute fixed & random loss
           if isinstance(self.nli, UnitRandomInterceptsBeta):
             alpha, beta, prediction, random_loss = self.nli(embedding, participant)
-            fixed_loss = lossfunc(alpha, beta, target)       
+            fixed_loss = self.lossfunc(alpha, beta, target)       
           else:
             prediction, random_loss = self.nli(embedding, participant)
-            fixed_loss = lossfunc(prediction, target)
+            fixed_loss = self.lossfunc(prediction, target)
 
           # Add total loss to trace
           loss = fixed_loss + random_loss
