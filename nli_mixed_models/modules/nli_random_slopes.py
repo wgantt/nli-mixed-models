@@ -2,7 +2,7 @@ import torch
 import pandas as pd
 
 from typing import Tuple
-from torch import cat, flatten
+from torch import cat, flatten, sigmoid
 from torch.nn import Module, ModuleList, Linear, ReLU, Sequential, Dropout, Parameter
 from torch.distributions.multivariate_normal import MultivariateNormal
 from fairseq.data.data_utils import collate_tokens
@@ -16,9 +16,7 @@ class RandomSlopesModel(NaturalLanguageInference):
                  device=torch.device('cpu')):
         super().__init__(embedding_dim, n_predictor_layers, output_dim,
                          n_participants, setting, device)
-        
         self.predictor_base, self.predictor_heads = self._initialize_predictor(self.n_participants)
-        self.random_effects = Parameter(self._initialize_random_effects())
 
 
     def _initialize_predictor(self, n_participants, hidden_dim=128):
@@ -83,20 +81,30 @@ class RandomSlopesModel(NaturalLanguageInference):
 
 class CategoricalRandomSlopes(RandomSlopesModel):
 
+    def __init__(self, embedding_dim: int, n_predictor_layers: int,  
+                 output_dim: int, n_participants: int, setting: str,
+                 device=torch.device('cpu')):
+        super().__init__(embedding_dim, n_predictor_layers, output_dim,
+                         n_participants, setting, device)
+        self.random_effects = self._initialize_random_effects()
+
     def _initialize_random_effects(self):
         """Initializes random effects as the MLP parameters."""
 
         # shape = n_participants x len(flattened MLP weights + biases)
-        return self._extract_random_slopes_params()
+        return self._random_effects()
     
 
     def _random_effects(self):
-        """Returns the mean-subtracted random effects of the model."""
+        """Returns the mean-subtracted random effects of the model.
 
-        # Even in the random slopes case, I don't think it matters
-        # whether we mean subtract or not here, since this is just used
-        # to compute loss (and not to actually scale the fixed term, as
-        # in UNLI).
+        Even in the random slopes case, I don't think it matters
+        whether we mean subtract or not here, since this is just used
+        to compute loss (and not to actually scale the fixed term, as
+        in UNLI). In any case, the weights have to be extracted anew
+        at each iteration, since they will have been updated.
+        """
+        self.random_effects = self._extract_random_slopes_params()
         return self.random_effects - self.random_effects.mean(0)[None,:]
     
 
@@ -125,22 +133,68 @@ class CategoricalRandomSlopes(RandomSlopesModel):
 
 
 class UnitRandomSlopes(RandomSlopesModel):
-    
-    def _initialize_random_effects(self):
-        return self._extract_random_slopes_params()
+
+    def __init__(self, embedding_dim: int, n_predictor_layers: int,  
+                 output_dim: int, n_participants: int, setting: str,
+                 device=torch.device('cpu')):
+        super().__init__(embedding_dim, n_predictor_layers, output_dim,
+                         n_participants, setting, device)
+        self.squashing_function = sigmoid
+        self._initialize_random_effects()
         
 
+    def _initialize_random_effects(self):
+        # The random effects in the unit random slopes model consist not
+        # only of the annotator MLP weights, but also of a random variance
+        # term, just as with the unit random intercepts model.
+        self.weights = self._extract_random_slopes_params()
+        self.weights -= self.weights.mean(0)[None,:]
+        variance = Parameter(torch.randn(self.n_participants))
+        self.variance = variance - variance.mean()
+        return self.weights, variance
+
     def _random_effects(self):
-        return self.random_effects - self.random_effects.mean(0)[None,:]
+        # Weights must be extracted anew each time from the regression heads
+        self.weights = self._extract_random_slopes_params()
+        self.weights -= self.weights.mean(0)[None,:]
+        return self.weights, self.variance - self.variance.mean()
     
 
-    def _link_function(self, predictions):
-        return predictions.squeeze(1)
+    def _link_function(self, predictions, participant):
+        # Same link function as for unit random intercepts, except that we
+        # feed the outputs of the annotator-specific regression heads to the
+        # squashing function.
+        mean = self.squashing_function(predictions).squeeze(1)
+
+        variance = torch.abs(self.variance[participant])
+        alpha = mean * variance
+        beta = (1 - mean) * variance
+        return alpha, beta, alpha / (alpha + beta)
     
 
     def _random_loss(self, random):
-        mean = torch.zeros(random.shape[1])
-        cov = torch.matmul(torch.transpose(random, 1, 0), random) / (self.n_participants - 1)
+        # Joint multivariate normal log prob loss over *all* random
+        # effects (weights + variance)
+        weights, variance = random
+        combined = torch.cat([weights, variance.unsqueeze(1)], dim=1)
+        mean = combined.mean(0)
+        cov = torch.matmul(torch.transpose(combined, 1, 0), combined) / (self.n_participants - 1)
         invcov = torch.inverse(cov)
-        return torch.matmul(torch.matmul(random.unsqueeze(1), invcov), \
-                    torch.transpose(random.unsqueeze(1), 1, 2)).mean(0)
+        return torch.matmul(torch.matmul(combined.unsqueeze(1), invcov), \
+                    torch.transpose(combined.unsqueeze(1), 1, 2)).mean(0)
+
+    def forward(self, embeddings, participant=None) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Need to override forward function in order to return alpha and beta,
+           which are used to compute the log likelihood of the observed values
+        """
+        predictions = []
+        for p, e in zip(participant, embeddings):
+            predictions.append(self.predictor_heads[p](self.predictor_base(e.mean(0))))
+
+        predictions = torch.stack(predictions, dim=0)
+
+        random_loss = self._random_loss(self._random_effects())
+
+        alpha, beta, predictions = self._link_function(predictions, participant=participant)
+        return alpha, beta, predictions, random_loss
+

@@ -95,8 +95,8 @@ def main(args):
                     test_data = neg[neg.fold == test_fold]
 
                     # Fit the model on the train folds
-                    # unit_model = unli_trainer.fit(train_data=train_data, **trainparams)
-                    unit_model = unli_trainer.nli
+                    unit_model = unli_trainer.fit(train_data=train_data, **trainparams)
+                    # unit_model = unli_trainer.nli
                     LOG.info('Finished training.')
 
                     # Save the model

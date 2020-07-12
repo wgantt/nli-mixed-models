@@ -49,7 +49,7 @@ class NaturalLanguageInferenceEval:
     def eval_subtask_b(self, test_data: pd.DataFrame, batch_size: int = 32):
       
         n_batches = np.ceil(test_data.shape[0]/batch_size)
-        test_data['batch_idx'] = np.repeat(np.arange(n_batches), batch_size)[:test_data.shape[0]]
+        test_data.loc[:,'batch_idx'] = np.repeat(np.arange(n_batches), batch_size)[:test_data.shape[0]]
 
         for batch, items in test_data.groupby('batch_idx'):
           LOG.info('evaluating batch [%s/%s]' % (int(batch), int(n_batches)))
@@ -60,7 +60,7 @@ class NaturalLanguageInferenceEval:
     def eval_subtask_a(self, test_data: pd.DataFrame, batch_size: int = 32):
         
         n_batches = np.ceil(test_data.shape[0]/batch_size)
-        test_data['batch_idx'] = np.repeat(np.arange(n_batches), batch_size)[:test_data.shape[0]]
+        test_data.loc[:,'batch_idx'] = np.repeat(np.arange(n_batches), batch_size)[:test_data.shape[0]]
 
         loss_trace = []
         metric_trace = []
@@ -82,7 +82,8 @@ class NaturalLanguageInferenceEval:
           embedding = self.nli.embed(items)
 
           # Calculate model prediction and compute fixed & random loss
-          if isinstance(self.nli, UnitRandomInterceptsBeta):
+          if isinstance(self.nli, UnitRandomInterceptsBeta) or \
+             isinstance(self.nli, UnitRandomSlopes):
             alpha, beta, prediction, random_loss = self.nli(embedding, participant)
             fixed_loss = self.lossfunc(alpha, beta, target)       
           else:

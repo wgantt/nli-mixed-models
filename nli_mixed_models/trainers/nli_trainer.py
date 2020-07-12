@@ -77,7 +77,7 @@ class NaturalLanguageInferenceTrainer:
 
             train_data = train_data.sample(frac=1).reset_index(drop=True)
 
-            train_data['batch_idx'] = np.repeat(np.arange(n_batches), batch_size)[:train_data.shape[0]]
+            train_data.loc[:,'batch_idx'] = np.repeat(np.arange(n_batches), batch_size)[:train_data.shape[0]]
             
             loss_trace = []
             metric_trace = []
@@ -96,7 +96,8 @@ class NaturalLanguageInferenceTrainer:
                 
                 embedding = self.nli.embed(items)
                 
-                if self.MODEL_CLASS == UnitRandomInterceptsBeta:
+                if self.MODEL_CLASS == UnitRandomInterceptsBeta or \
+                   self.MODEL_CLASS == UnitRandomSlopes:
                     alpha, beta, prediction, random_loss = self.nli(embedding, participant)
                     fixed_loss = lossfunc(alpha, beta, target)
                 else:
@@ -196,6 +197,7 @@ class UnitRandomInterceptsBetaTrainer(UnitTrainer):
 
 class UnitRandomSlopesTrainer(UnitTrainer):
     MODEL_CLASS = UnitRandomSlopes
+    LOSS_CLASS = BetaLogProbLoss
 
 
 # Categorical models
