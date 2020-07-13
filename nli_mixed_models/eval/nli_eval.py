@@ -73,8 +73,10 @@ class NaturalLanguageInferenceEval:
              isinstance(self.nli, UnitRandomSlopes):
             alpha, beta, prediction, random_loss = self.nli(embedding, participant)
             fixed_loss = self.lossfunc(alpha, beta, target)       
+            random_loss = random_loss if isinstance(random_loss, float) else random_loss.item()
           else:
             prediction, random_loss = self.nli(embedding, participant)
+            random_loss = random_loss if isinstance(random_loss, float) else random_loss.item()
             fixed_loss = self.lossfunc(prediction, target)
 
           # Add total loss to trace

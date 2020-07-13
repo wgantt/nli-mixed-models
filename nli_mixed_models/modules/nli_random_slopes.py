@@ -150,7 +150,7 @@ class UnitRandomSlopes(RandomSlopesModel):
         self.weights = self._extract_random_slopes_params()
         self.weights -= self.weights.mean(0)[None,:]
         variance = Parameter(torch.randn(self.n_participants))
-        self.variance = variance - variance.mean()
+        self.variance = (variance - variance.mean()).to(self.device)
         return self.weights, variance
 
     def _random_effects(self):

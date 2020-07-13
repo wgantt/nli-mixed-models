@@ -100,9 +100,11 @@ class NaturalLanguageInferenceTrainer:
                 if self.MODEL_CLASS == UnitRandomInterceptsBeta or \
                    self.MODEL_CLASS == UnitRandomSlopes:
                     alpha, beta, prediction, random_loss = self.nli(embedding, participant)
+                    random_loss = random_loss if isinstance(random_loss, float) else random_loss.item()
                     fixed_loss = lossfunc(alpha, beta, target)
                 else:
                     prediction, random_loss = self.nli(embedding, participant)
+                    random_loss = random_loss if isinstance(random_loss, float) else random_loss.item()
                     fixed_loss = lossfunc(prediction, target)
                 
                 loss = fixed_loss + random_loss
