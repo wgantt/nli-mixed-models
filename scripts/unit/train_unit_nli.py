@@ -85,7 +85,12 @@ def main(args):
                     subtask = settings['subtask']
 
                 # Perform k-fold cross-validation
+                # Note: we really don't need to be keeping track of the
+                # random loss, since it should be constant. This is just
+                # a sanity check.
                 loss_all = []
+                fixed_loss_all = []
+                random_loss_all = []
                 error_all = []
                 best_all = []
                 for i in range(k_folds):
@@ -100,28 +105,34 @@ def main(args):
 
                     # Fit the model on the train folds
                     unit_model = unli_trainer.fit(train_data=train_data, **trainparams)
-                    # unit_model = unli_trainer.nli
                     LOG.info('Finished training.')
 
                     # Save the model
                     if save_checkpoints:
                         LOG.info('Saving model...')
-                        save_model_with_args(params, unit_model, hyperparams, checkpoint_dir, checkpoint_file_name + '-fold-' + str(i))
+                        model_name = '-'.join([checkpoint_file_name, 'fold', str(i), 'partition', split_type])
+                        save_model_with_args(params, unit_model, hyperparams, checkpoint_dir, model_name)
                         LOG.info('Model saved.')
 
                     # Evaluate the model on the test fold
                     unli_eval = UnitBetaEval(unit_model, subtask) if settings['use_beta_distribution'] else UnitEval(unit_model, subtask)
-                    loss_mean, error_mean, best_mean = unli_eval.eval(test_data, trainparams['batch_size'])
+                    loss_mean, fixed_loss_mean, random_loss_mean, error_mean, best_mean = unli_eval.eval(test_data, trainparams['batch_size'])
                     loss_all.append(loss_mean)
+                    fixed_loss_all.append(fixed_loss_mean)
+                    random_loss_all.append(random_loss_mean)
                     error_all.append(error_mean)
                     best_all.append(best_mean)
                     LOG.info(f'Test results for fold {i}')
                     LOG.info(f'Mean loss:           {loss_mean}')
+                    LOG.info(f'Mean fixed loss:     {fixed_loss_mean}')
+                    LOG.info(f'Mean random loss:    {random_loss_mean}')
                     LOG.info(f'Mean error:       {error_mean}')
                     LOG.info(f'Prop. best possible: {best_mean}')
 
                 LOG.info('Finished k-fold cross evaluation.')
-                LOG.info(f'Mean error:           {np.round(np.mean(loss_all), 2)}')
+                LOG.info(f'Mean loss:           {np.round(np.mean(loss_all), 2)}')
+                LOG.info(f'Mean fixed loss:     {np.round(np.mean(fixed_loss_all), 2)}')
+                LOG.info(f'Mean random loss:    {np.round(np.mean(random_loss_all), 2)}')
                 LOG.info(f'Mean error:       {np.round(np.mean(error_all), 2)}')
                 LOG.info(f'Prop. best possible: {np.round(np.mean(best_all), 2)}')
 

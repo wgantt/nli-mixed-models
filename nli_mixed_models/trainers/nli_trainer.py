@@ -111,7 +111,7 @@ class NaturalLanguageInferenceTrainer:
                 # Shouldn't this include the random loss? -B.K.
                 # loss_trace.append(loss.item()-random_loss.item())
                 fixed_loss_trace.append(fixed_loss.item())
-                random_loss_trace.append(random_loss.item())
+                random_loss_trace.append(random_loss)
                 loss_trace.append(loss.item())
                 all_loss_trace.append(loss.item())
                 

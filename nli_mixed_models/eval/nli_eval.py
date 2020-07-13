@@ -44,6 +44,8 @@ class NaturalLanguageInferenceEval:
         test_data.loc[:,'batch_idx'] = np.repeat(np.arange(n_batches), batch_size)[:test_data.shape[0]]
 
         loss_trace = []
+        fixed_loss_trace = []
+        random_loss_trace = []
         metric_trace = []
         best_trace = []
 
@@ -77,6 +79,8 @@ class NaturalLanguageInferenceEval:
           # Add total loss to trace
           loss = fixed_loss + random_loss
           loss_trace.append(loss.item())
+          fixed_loss_trace.append(fixed_loss.item())
+          random_loss_trace.append(random_loss)
 
           # If categorical, calculate accuracy
           if isinstance(self.nli, CategoricalRandomIntercepts) or \
@@ -95,10 +99,12 @@ class NaturalLanguageInferenceEval:
 
         # Calculate and return mean of metrics across all batches
         loss_mean = np.round(np.mean(loss_trace), 2)
+        fixed_loss_mean = np.round(np.mean(fixed_loss_trace), 2)
+        random_loss_mean = np.round(np.mean(random_loss_trace), 2)
         metric_mean = np.round(np.mean(metric_trace), 2)
         best_mean = np.round(np.mean(best_trace), 2)
 
-        return loss_mean, metric_mean, best_mean
+        return loss_mean, fixed_loss_mean, random_loss_mean, metric_mean, best_mean
 
 
 # Unit eval
