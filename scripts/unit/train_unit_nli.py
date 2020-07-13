@@ -41,100 +41,94 @@ def main(args):
             hyperparams['n_participants'] = neg.participant.unique().shape[0]
             LOG.info('...Complete.')
 
-            # Dump current training settings
-            LOG.info('Initializing unit NLI model with the following hyperparameters:')
-            LOG.info(json.dumps(hyperparams, indent=4))
-            LOG.info('Using the following training parameters:')
-            LOG.info(json.dumps(trainparams, indent=4))
-            LOG.info('And the following settings:')
-            LOG.info(json.dumps(settings, indent=4))
+            # Assign folds to each veridicality example
+            k_folds = settings['k_folds']
+            split_type = settings['split_type']
+            setting = hyperparams['setting']
+            neg = generate_splits(neg, split_type, k_folds=k_folds, datatype='n')
+            LOG.info(f'Beginning training with {k_folds}-fold cross-validation in the {setting} setting, partitioning based on {split_type}.')
 
-            # Only the random intercepts models have been modified to handle
-            # the standard setting in addition to the extended one.
-            if hyperparams['setting'] == 'extended' and settings['use_random_slopes']:
-                unli_trainer = UnitRandomSlopesTrainer(**hyperparams)
-            elif settings['use_beta_distribution']:
-                unli_trainer = UnitRandomInterceptsBetaTrainer(**hyperparams)
+            # Save the DataFrame used for training + eval in case
+            # we need to recover it later
+            data_file_name = checkpoint_dir + '/' + '-'.join([checkpoint_file_name, 'partition', split_type, 'data']) + '.csv'
+            neg.to_csv(data_file_name, index=False)
+
+            # Determine which subtask can be used
+            if setting == 'standard':
+                subtask = 'a'
+            elif split_type == 'participant':
+                subtask = 'b'
             else:
-                unli_trainer = UnitRandomInterceptsNormalTrainer(**hyperparams)
+                subtask = settings['subtask']
 
-            LOG.info('...Complete')
+            # Perform k-fold cross-validation
+            # Note: we really don't need to be keeping track of the
+            # random loss, since it should be constant. This is just
+            # a sanity check.
+            loss_all = []
+            fixed_loss_all = []
+            random_loss_all = []
+            error_all = []
+            best_all = []
+            for i in range(k_folds):
 
-            # Run the model
-            # Using 'know' and 'think' just for debugging purposes;
-            # actual training runs on all verbs
-            if args.debug:
-                LOG.info('Beginning training in debug mode...')
-                unit_model = unli_trainer.fit(data=neg[neg.verb.isin(['know', 'think'])],\
-                                                **trainparams)
-                LOG.info('Finished training.')
-            else:
-                # Assign folds to each veridicality example
-                k_folds = settings['k_folds']
-                split_type = settings['split_type']
-                setting = hyperparams['setting']
-                neg = generate_splits(neg, split_type, k_folds=k_folds, datatype='n')
-                LOG.info(f'Beginning training with {k_folds}-fold cross-validation in the {setting} setting, partitioning based on {split_type}.')
+                # Dump current training settings
+                LOG.info('Initializing unit NLI model with the following hyperparameters:')
+                LOG.info(json.dumps(hyperparams, indent=4))
+                LOG.info('Using the following training parameters:')
+                LOG.info(json.dumps(trainparams, indent=4))
+                LOG.info('And the following settings:')
+                LOG.info(json.dumps(settings, indent=4))
 
-                # Determine which subtask can be used
-                if setting == 'standard':
-                    subtask = 'a'
-                elif split_type == 'participant':
-                    subtask = 'b'
+                # Only the random intercepts models have been modified to handle
+                # the standard setting in addition to the extended one.
+                if hyperparams['setting'] == 'extended' and settings['use_random_slopes']:
+                    unli_trainer = UnitRandomSlopesTrainer(**hyperparams)
+                elif settings['use_beta_distribution']:
+                    unli_trainer = UnitRandomInterceptsBetaTrainer(**hyperparams)
                 else:
-                    subtask = settings['subtask']
+                    unli_trainer = UnitRandomInterceptsNormalTrainer(**hyperparams)
 
-                # Perform k-fold cross-validation
-                # Note: we really don't need to be keeping track of the
-                # random loss, since it should be constant. This is just
-                # a sanity check.
-                loss_all = []
-                fixed_loss_all = []
-                random_loss_all = []
-                error_all = []
-                best_all = []
-                for i in range(k_folds):
+                # Select the folds
+                test_fold = i
+                train_folds = [j for j in range(k_folds) if j != test_fold]
+                LOG.info(f'Beginning training with test fold={test_fold}.')
 
-                    # Select the folds
-                    test_fold = i
-                    train_folds = [j for j in range(k_folds) if j != test_fold]
-                    LOG.info(f'Beginning training with test fold={test_fold}.')
+                train_data = neg[neg.fold.isin(train_folds)]
+                test_data = neg[neg.fold == test_fold]
 
-                    train_data = neg[neg.fold.isin(train_folds)]
-                    test_data = neg[neg.fold == test_fold]
+                # Fit the model on the train folds
+                unit_model = unli_trainer.fit(train_data=train_data, **trainparams)
+                LOG.info('Finished training.')
 
-                    # Fit the model on the train folds
-                    unit_model = unli_trainer.fit(train_data=train_data, **trainparams)
-                    LOG.info('Finished training.')
+                # Save the model
+                if save_checkpoints:
+                    LOG.info('Saving model...')
+                    model_name = '-'.join([checkpoint_file_name, 'fold', str(i), 'partition', split_type]) + '.pt'
+                    save_model_with_args(params, unit_model, hyperparams, checkpoint_dir, model_name)
+                    LOG.info('Model saved.')
 
-                    # Save the model
-                    if save_checkpoints:
-                        LOG.info('Saving model...')
-                        model_name = '-'.join([checkpoint_file_name, 'fold', str(i), 'partition', split_type])
-                        save_model_with_args(params, unit_model, hyperparams, checkpoint_dir, model_name)
-                        LOG.info('Model saved.')
+                # Evaluate the model on the test fold
+                unli_eval = UnitBetaEval(unit_model, subtask) if settings['use_beta_distribution'] else UnitEval(unit_model, subtask)
+                loss_mean, fixed_loss_mean, random_loss_mean, error_mean, best_mean = unli_eval.eval(test_data, trainparams['batch_size'])
+                loss_all.append(loss_mean)
+                fixed_loss_all.append(fixed_loss_mean)
+                random_loss_all.append(random_loss_mean)
+                error_all.append(error_mean)
+                best_all.append(best_mean)
+                LOG.info(f'Test results for fold {i}')
+                LOG.info(f'Mean loss:           {loss_mean}')
+                LOG.info(f'Mean fixed loss:     {fixed_loss_mean}')
+                LOG.info(f'Mean random loss:    {random_loss_mean}')
+                LOG.info(f'Mean error:       {error_mean}')
+                LOG.info(f'Prop. best possible: {best_mean}')
 
-                    # Evaluate the model on the test fold
-                    unli_eval = UnitBetaEval(unit_model, subtask) if settings['use_beta_distribution'] else UnitEval(unit_model, subtask)
-                    loss_mean, fixed_loss_mean, random_loss_mean, error_mean, best_mean = unli_eval.eval(test_data, trainparams['batch_size'])
-                    loss_all.append(loss_mean)
-                    fixed_loss_all.append(fixed_loss_mean)
-                    random_loss_all.append(random_loss_mean)
-                    error_all.append(error_mean)
-                    best_all.append(best_mean)
-                    LOG.info(f'Test results for fold {i}')
-                    LOG.info(f'Mean loss:           {loss_mean}')
-                    LOG.info(f'Mean fixed loss:     {fixed_loss_mean}')
-                    LOG.info(f'Mean random loss:    {random_loss_mean}')
-                    LOG.info(f'Mean error:       {error_mean}')
-                    LOG.info(f'Prop. best possible: {best_mean}')
-
-                LOG.info('Finished k-fold cross evaluation.')
-                LOG.info(f'Mean loss:           {np.round(np.mean(loss_all), 2)}')
-                LOG.info(f'Mean fixed loss:     {np.round(np.mean(fixed_loss_all), 2)}')
-                LOG.info(f'Mean random loss:    {np.round(np.mean(random_loss_all), 2)}')
-                LOG.info(f'Mean error:       {np.round(np.mean(error_all), 2)}')
-                LOG.info(f'Prop. best possible: {np.round(np.mean(best_all), 2)}')
+            LOG.info('Finished k-fold cross evaluation.')
+            LOG.info(f'Mean loss:           {np.round(np.mean(loss_all), 2)}')
+            LOG.info(f'Mean fixed loss:     {np.round(np.mean(fixed_loss_all), 2)}')
+            LOG.info(f'Mean random loss:    {np.round(np.mean(random_loss_all), 2)}')
+            LOG.info(f'Mean error:       {np.round(np.mean(error_all), 2)}')
+            LOG.info(f'Prop. best possible: {np.round(np.mean(best_all), 2)}')
 
 
 if __name__ == '__main__':
@@ -143,9 +137,5 @@ if __name__ == '__main__':
                         type=str,
                         default='scripts/unit/train_unit_nli.json',
                         help='Path to a JSON containing parameters to sweep')
-    parser.add_argument('--debug',
-                        action='store_true',
-                        help='If provided, runs training on a small subset of'\
-                        'the data, instead of doing full k-fold cross-validation.')
     args = parser.parse_args()
     main(args)
