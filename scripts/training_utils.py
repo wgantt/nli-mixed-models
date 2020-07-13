@@ -81,7 +81,7 @@ def load_veridicality():
 
 	def mode(x):
 		values, counts = np.unique(x, return_counts=True)
-    		return values[counts.argmax()]
+		return values[counts.argmax()]
 
 
 	# Read the CSV
