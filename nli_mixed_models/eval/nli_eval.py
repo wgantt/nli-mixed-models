@@ -35,29 +35,10 @@ class NaturalLanguageInferenceEval:
         self.subtask = subtask
         self.lossfunc = self.LOSS_CLASS()
 
-
+    
     def eval(self, test_data: pd.DataFrame, batch_size: int = 32):
 
-      self.nli.eval()
-
-      if self.subtask == 'a':
-        return self.eval_subtask_a(test_data, batch_size)
-      else:
-        return self.eval_subtask_b(test_data, batch_size)
-
-      
-    def eval_subtask_b(self, test_data: pd.DataFrame, batch_size: int = 32):
-      
-        n_batches = np.ceil(test_data.shape[0]/batch_size)
-        test_data.loc[:,'batch_idx'] = np.repeat(np.arange(n_batches), batch_size)[:test_data.shape[0]]
-
-        for batch, items in test_data.groupby('batch_idx'):
-          LOG.info('evaluating batch [%s/%s]' % (int(batch), int(n_batches)))
-
-          # TODO
-
-    
-    def eval_subtask_a(self, test_data: pd.DataFrame, batch_size: int = 32):
+        self.nli.eval()
         
         n_batches = np.ceil(test_data.shape[0]/batch_size)
         test_data.loc[:,'batch_idx'] = np.repeat(np.arange(n_batches), batch_size)[:test_data.shape[0]]
@@ -70,7 +51,10 @@ class NaturalLanguageInferenceEval:
         for batch, items in test_data.groupby('batch_idx'):
           LOG.info('evaluating batch [%s/%s]' % (int(batch), int(n_batches)))
 
-          participant = torch.LongTensor(items.participant.values)
+          if self.subtask == 'a':
+            participant = torch.LongTensor(items.participant.values)
+          else:
+            participant = None
     
           # Get target values of appropriate type
           if isinstance(self.nli, CategoricalRandomIntercepts) or isinstance(self.nli, CategoricalRandomSlopes):

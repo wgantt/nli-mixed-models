@@ -54,7 +54,7 @@ class RandomInterceptsModel(NaturalLanguageInference):
         
         # The "standard" setting, where we do not have access to annotator
         # information and thus do not have random effects.
-        if self.setting == 'standard' or participant is None:
+        if self.setting == 'standard':
             random = None
             random_loss = 0.
         # The "extended" setting, where we have annotator random effects.
@@ -85,8 +85,15 @@ class CategoricalRandomIntercepts(RandomInterceptsModel):
 
     def _link_function(self, fixed, random, participant):
         """Computes the link function for a given model configuration."""
+        # Standard setting: no participants, so no random effects.
         if self.setting == 'standard' or random is None:
             return fixed
+        # Extended setting subtask (b): assume mean annotator, so use mean
+        # of random effects for prediction (should be zero in this case).
+        elif participant is None:
+            print('subtask (b)')
+            return fixed + random.mean(0)[None,:]
+        # Extended setting subtask (a).
         else:
             return fixed + random[participant]
 
@@ -118,8 +125,12 @@ class UnitRandomInterceptsNormal(RandomInterceptsModel):
     
 
     def _link_function(self, fixed, random, participant):
+        # Standard setting: no participants, so no random effects.
         if self.setting == 'standard' or random is None:
             return torch.square(self.random_effects[:,0]).mean()*fixed.squeeze(1)
+        # TODO: didn't implement subtask (b) here, since I don't think we'll be using
+        # this model. Will need to fix if we do end up using this model in the experiments.
+        # Extended setting subtask (a).
         else:
             random_scale, random_shift = random
             return (random_scale[participant][:,None]*fixed +\
@@ -175,7 +186,22 @@ class UnitRandomInterceptsBeta(RandomInterceptsModel):
             alpha = mean * variance
             beta = (1 - mean) * variance
 
-        # Extended setting    
+        # Extended setting subtask (b): assume mean annotator, so use mean
+        # of random effects for prediction.
+        elif participant is None:
+            random_shift, random_variance = random
+
+            # This is the mean of the beta distribution
+            mean = self.squashing_function(fixed + random_shift.mean(0)).squeeze(1)
+
+            # Parameter estimates for the beta distribution. These are
+            # estimated from the mean and variance. Since both components
+            # are initialized by randn, we use abs to enforce non-negativity
+            # for random_variance
+            alpha = mean * torch.abs(random_variance.mean(0))
+            beta = (1 - mean) * torch.abs(random_variance.mean(0))
+
+        # Extended setting subtask (a).
         else:
             random_shift, random_variance = random
 
@@ -213,7 +239,7 @@ class UnitRandomInterceptsBeta(RandomInterceptsModel):
         """
         fixed = self.predictor(embeddings.mean(1))
         
-        if self.setting == 'standard' or participant is None:
+        if self.setting == 'standard':
             random = None
             random_loss = 0.
         else:
