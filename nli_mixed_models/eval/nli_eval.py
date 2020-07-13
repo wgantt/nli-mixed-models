@@ -30,10 +30,11 @@ LOG = setup_logging()
 class NaturalLanguageInferenceEval:
     
     def __init__(self, model: NaturalLanguageInference, 
-                 subtask: str = 'a'):
+                 subtask: str = 'a', device='cpu'):
         self.nli = model
         self.subtask = subtask
         self.lossfunc = self.LOSS_CLASS()
+        self.device = device
 
     
     def eval(self, test_data: pd.DataFrame, batch_size: int = 32):
@@ -60,9 +61,9 @@ class NaturalLanguageInferenceEval:
     
           # Get target values of appropriate type
           if isinstance(self.nli, CategoricalRandomIntercepts) or isinstance(self.nli, CategoricalRandomSlopes):
-            target = torch.LongTensor(items.target.values)
+            target = torch.LongTensor(items.target.values).to(self.device)
           else:
-            target = torch.FloatTensor(items.target.values)
+            target = torch.FloatTensor(items.target.values).to(self.device)
 
           # Embed items    
           embedding = self.nli.embed(items)

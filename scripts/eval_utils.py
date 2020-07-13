@@ -11,7 +11,7 @@ from .setup_logging import setup_logging
 
 def accuracy(prediction, target):
   """The fraction of predictions which match the target class"""
-  return (prediction.argmax(1) == target).data.cpu().numpy().mean()
+  return (prediction.argmax(1) == target).cpu().numpy().mean()
 
 def absolute_error(prediction, target, lossfunc = BCEWithLogitsLoss()):
   """The absolute error using some loss function (BCEWithLogitsLoss by default)"""

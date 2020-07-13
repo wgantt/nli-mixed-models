@@ -109,7 +109,7 @@ def main(args):
                     LOG.info('Model saved.')
 
                 # Evaluate the model on the test fold
-                cnli_eval = CategoricalEval(cat_model, subtask)
+                cnli_eval = CategoricalEval(cat_model, subtask, device=device)
                 loss_mean, fixed_loss_mean, random_loss_mean, acc_mean, best_mean = \
                     cnli_eval.eval(test_data, trainparams['batch_size'])
                 loss_all.append(loss_mean)

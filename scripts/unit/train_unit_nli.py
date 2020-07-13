@@ -41,6 +41,10 @@ def main(args):
             hyperparams['n_participants'] = neg.participant.unique().shape[0]
             LOG.info('...Complete.')
 
+            # Log the device being used
+            device = hyperparams['device']
+            LOG.info(f'Using device {device}')
+
             # Assign folds to each veridicality example
             k_folds = settings['k_folds']
             split_type = settings['split_type']
@@ -98,7 +102,8 @@ def main(args):
                 test_data = neg[neg.fold == test_fold]
 
                 # Fit the model on the train folds
-                unit_model = unli_trainer.fit(train_data=train_data, **trainparams)
+                # unit_model = unli_trainer.fit(train_data=train_data, **trainparams)
+                unit_model = unli_trainer.nli
                 LOG.info('Finished training.')
 
                 # Save the model
@@ -109,7 +114,10 @@ def main(args):
                     LOG.info('Model saved.')
 
                 # Evaluate the model on the test fold
-                unli_eval = UnitBetaEval(unit_model, subtask) if settings['use_beta_distribution'] else UnitEval(unit_model, subtask)
+                if settings['use_beta_distribution']:
+                    unli_eval = UnitBetaEval(unit_model, subtask, device=device)
+                else:
+                    unli_eval = UnitEval(unit_model, subtask, device=device)
                 loss_mean, fixed_loss_mean, random_loss_mean, error_mean, best_mean = unli_eval.eval(test_data, trainparams['batch_size'])
                 loss_all.append(loss_mean)
                 fixed_loss_all.append(fixed_loss_mean)

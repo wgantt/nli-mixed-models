@@ -49,7 +49,7 @@ class NaturalLanguageInferenceTrainer:
                                     self.OUTPUT_DIM, 
                                     n_participants,
                                     setting,
-                                    device)
+                                    device).to(device)
         self.data_type = 'categorical' if \
             self.MODEL_CLASS is CategoricalRandomIntercepts or \
             self.MODEL_CLASS is CategoricalRandomSlopes \
@@ -94,9 +94,8 @@ class NaturalLanguageInferenceTrainer:
                 else:
                     participant = None
 
-                target = self.TARGET_TYPE(items.target.values)
-                
-                embedding = self.nli.embed(items)
+                target = self.TARGET_TYPE(items.target.values).to(self.device)
+                embedding = self.nli.embed(items).to(self.device)
                 
                 if self.MODEL_CLASS == UnitRandomInterceptsBeta or \
                    self.MODEL_CLASS == UnitRandomSlopes:
