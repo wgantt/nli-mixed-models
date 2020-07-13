@@ -39,9 +39,13 @@ def main(args):
             hyperparams['n_participants'] = ver.participant.unique().shape[0]
             LOG.info('...Complete.')
 
-            # Initialize the model
+            # Dump current training settings
             LOG.info('Initializing categorical NLI model with the following hyperparameters:')
             LOG.info(json.dumps(hyperparams, indent=4))
+            LOG.info('Using the following training parameters:')
+            LOG.info(json.dumps(trainparams, indent=4))
+            LOG.info('And the following settings:')
+            LOG.info(json.dumps(settings, indent=4))
 
             # Only the random intercepts models have been modified to handle
             # the standard setting in addition to the extended one.

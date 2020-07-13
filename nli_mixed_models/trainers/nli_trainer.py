@@ -80,6 +80,8 @@ class NaturalLanguageInferenceTrainer:
             train_data.loc[:,'batch_idx'] = np.repeat(np.arange(n_batches), batch_size)[:train_data.shape[0]]
             
             loss_trace = []
+            random_loss_trace = []
+            fixed_loss_trace = []
             metric_trace = []
             best_trace = []
             
@@ -108,6 +110,8 @@ class NaturalLanguageInferenceTrainer:
                 
                 # Shouldn't this include the random loss? -B.K.
                 # loss_trace.append(loss.item()-random_loss.item())
+                fixed_loss_trace.append(fixed_loss.item())
+                random_loss_trace.append(random_loss.item())
                 loss_trace.append(loss.item())
                 all_loss_trace.append(loss.item())
                 
@@ -127,6 +131,9 @@ class NaturalLanguageInferenceTrainer:
                     LOG.info(f'epoch:               {int(epoch)}')
                     LOG.info(f'batch:               {int(batch)}')
                     LOG.info(f'mean loss:           {np.round(np.mean(loss_trace), 2)}')
+                    LOG.info(f'mean fixed loss:     {np.round(np.mean(fixed_loss_trace), 2)}')
+                    # This should obviously remain constant
+                    LOG.info(f'mean random loss:    {np.round(np.mean(random_loss_trace), 2)}')
                     if self.data_type == 'categorical':
                         LOG.info(f'mean acc.:           {np.round(np.mean(metric_trace), 2)}')
                     elif self.data_type == 'unit':
@@ -137,6 +144,8 @@ class NaturalLanguageInferenceTrainer:
                     LOG.info('')
 
                     loss_trace = []
+                    fixed_loss_trace = []
+                    random_loss_trace = []
                     metric_trace = []
                     best_trace = []
 
