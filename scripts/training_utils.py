@@ -63,6 +63,10 @@ def load_model_with_args(cls, ckpt_path):
     model.load_state_dict(ckpt_dict['state_dict'])
     return model, hyper_params
 
+def mode(x):
+    values, counts = np.unique(x, return_counts=True)
+    return values[counts.argmax()]
+
 def load_veridicality():
 
 	def make_hypothesis(frame):
@@ -74,6 +78,11 @@ def load_veridicality():
 			return 'That person did that thing.'
 		elif frame in ['to_VPstative', 'NP_to_VPstative']:
 			return 'That person had that thing.'
+
+	def mode(x):
+		values, counts = np.unique(x, return_counts=True)
+		return values[counts.argmax()]
+
 
 	# Read the CSV
 	df = pd.read_csv(VERIDICALITY_URL)
@@ -116,7 +125,7 @@ def load_veridicality():
 	# Lastly, we compute the modal response for each verb-frame pair. This
 	# will allow us to determine how well the model does in comparison to
 	# the best possible model.
-	df['modal_response'] = df.groupby(['verb', 'frame']).target.transform(lambda x: int(np.round(np.mean(x))))
+	df['modal_response'] = df.groupby(['verb', 'frame']).target.transform(lambda x: mode(x))
 
 	return df
 
