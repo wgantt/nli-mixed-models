@@ -54,6 +54,12 @@ class RandomSlopesModel(NaturalLanguageInference):
         # Return (n_participants, flattened_head_dim)-shaped tensor
         return torch.stack(random_effects)
 
+
+    def _create_mean_predictor(self):
+      """Creates a new predictor using the mean parameters across the predictor heads."""
+      self.predictor_heads
+      pass
+
     
     def forward(self, embeddings, participant=None) -> Tuple[torch.Tensor, torch.Tensor]:
         """Do a forward pass on the model. Returns a tuple (prediction, random_loss), where
@@ -62,7 +68,17 @@ class RandomSlopesModel(NaturalLanguageInference):
         # Shared base MLP with annotator-specific final linear layers. Not sure whether
         # there's a clever way to vectorize this.
         predictions = []
-        for p, e in zip(participant, embeddings):
+        # Extended setting subtask (b): assume a mean annotator, so create a new predictor
+        # head using the mean parameters across the predictor heads.
+        # NOTE: only used in eval mode - cannot be used for training since autograd will not work.
+        if participant is None:
+          predictor_heads_mean = self._create_mean_predictor()
+          for e in embeddings:
+            predictions.append(predictor_heads_mean(self.predictor_base(e.mean(0))))
+        # Extended setting subtask (a).
+        else:
+          print(predictor_heads.shape)
+          for p, e in zip(participant, embeddings):
             predictions.append(self.predictor_heads[p](self.predictor_base(e.mean(0))))
 
         # 'fixed' is obviously something of a misnomer here, given that it's
@@ -153,6 +169,7 @@ class UnitRandomSlopes(RandomSlopesModel):
         self.variance = (variance - variance.mean()).to(self.device)
         return self.weights, variance
 
+
     def _random_effects(self):
         # Weights must be extracted anew each time from the regression heads
         self.weights = self._extract_random_slopes_params()
@@ -166,7 +183,13 @@ class UnitRandomSlopes(RandomSlopesModel):
         # squashing function.
         mean = self.squashing_function(predictions).squeeze(1)
 
-        variance = torch.abs(self.variance[participant])
+        # Extended setting subtask (b): use mean variance across participants.
+        if participant is None:
+          variance = torch.abs(self.variance.mean(0))
+        # Extended setting subtask (a).
+        else:
+          variance = torch.abs(self.variance[participant])
+
         alpha = mean * variance
         beta = (1 - mean) * variance
         return alpha, beta, alpha / (alpha + beta)
