@@ -55,10 +55,24 @@ class RandomSlopesModel(NaturalLanguageInference):
         return torch.stack(random_effects)
 
 
-    def _create_mean_predictor(self):
-      """Creates a new predictor using the mean parameters across the predictor heads."""
-      self.predictor_heads
-      pass
+    def _create_mean_predictor(self, hidden_dim=128):
+      """Creates a new predictor using the mean parameters across the predictor heads.
+         TODO: once hidden_dim is made a model parameter, we can remove it in the function
+         arguments here.
+      """
+      weights = []
+      biases = []
+      # Collect weights/biases from each predictor head and create tensors
+      for i in range(self.n_participants):
+        weights.append(self.predictor_heads[i].weight)
+        biases.append(self.predictor_heads[i].bias)
+      weights = torch.stack(weights)
+      biases = torch.stack(biases)
+      # Create new linear predictor and set weights/biases to means
+      predictor_heads_mean = Linear(hidden_dim, self.output_dim)
+      predictor_heads_mean.weight = Parameter(weights.mean(0))
+      predictor_heads_mean.bias = Parameter(biases.mean(0))
+      return predictor_heads_mean
 
     
     def forward(self, embeddings, participant=None) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -77,7 +91,6 @@ class RandomSlopesModel(NaturalLanguageInference):
             predictions.append(predictor_heads_mean(self.predictor_base(e.mean(0))))
         # Extended setting subtask (a).
         else:
-          print(predictor_heads.shape)
           for p, e in zip(participant, embeddings):
             predictions.append(self.predictor_heads[p](self.predictor_base(e.mean(0))))
 
@@ -206,12 +219,24 @@ class UnitRandomSlopes(RandomSlopesModel):
         return torch.matmul(torch.matmul(combined.unsqueeze(1), invcov), \
                     torch.transpose(combined.unsqueeze(1), 1, 2)).mean(0)
 
+
     def forward(self, embeddings, participant=None) -> Tuple[torch.Tensor, torch.Tensor]:
         """Need to override forward function in order to return alpha and beta,
            which are used to compute the log likelihood of the observed values
         """
+        # Shared base MLP with annotator-specific final linear layers. Not sure whether
+        # there's a clever way to vectorize this.
         predictions = []
-        for p, e in zip(participant, embeddings):
+        # Extended setting subtask (b): assume a mean annotator, so create a new predictor
+        # head using the mean parameters across the predictor heads.
+        # NOTE: only used in eval mode - cannot be used for training since autograd will not work.
+        if participant is None:
+          predictor_heads_mean = self._create_mean_predictor()
+          for e in embeddings:
+            predictions.append(predictor_heads_mean(self.predictor_base(e.mean(0))))
+        # Extended setting subtask (a).
+        else:
+          for p, e in zip(participant, embeddings):
             predictions.append(self.predictor_heads[p](self.predictor_base(e.mean(0))))
 
         predictions = torch.stack(predictions, dim=0)
