@@ -91,7 +91,6 @@ class CategoricalRandomIntercepts(RandomInterceptsModel):
         # Extended setting subtask (b): assume mean annotator, so use mean
         # of random effects for prediction (should be zero in this case).
         elif participant is None:
-            print('subtask (b)')
             return fixed + random.mean(0)[None,:]
         # Extended setting subtask (a).
         else:

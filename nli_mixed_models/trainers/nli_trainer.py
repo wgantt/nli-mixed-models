@@ -73,6 +73,7 @@ class NaturalLanguageInferenceTrainer:
         # early stopping
         all_loss_trace = []       
         iters_without_improvement = 0
+        prev_epoch_mean_loss = np.inf
         for epoch in range(n_epochs):
 
             train_data = train_data.sample(frac=1).reset_index(drop=True)
@@ -84,6 +85,7 @@ class NaturalLanguageInferenceTrainer:
             fixed_loss_trace = []
             metric_trace = []
             best_trace = []
+            epoch_loss_trace = []
             
             for batch, items in train_data.groupby('batch_idx'):
                 self.nli.zero_grad()
@@ -115,6 +117,7 @@ class NaturalLanguageInferenceTrainer:
                 random_loss_trace.append(random_loss)
                 loss_trace.append(loss.item())
                 all_loss_trace.append(loss.item())
+                epoch_loss_trace.append(loss.item())
                 
                 if self.data_type == 'categorical':
                     acc = accuracy(prediction, target)
@@ -131,15 +134,15 @@ class NaturalLanguageInferenceTrainer:
                 if not (batch % verbosity):
                     LOG.info(f'epoch:               {int(epoch)}')
                     LOG.info(f'batch:               {int(batch)}')
-                    LOG.info(f'mean loss:           {np.round(np.mean(loss_trace), 2)}')
-                    LOG.info(f'mean fixed loss:     {np.round(np.mean(fixed_loss_trace), 2)}')
+                    LOG.info(f'mean loss:           {np.round(np.mean(loss_trace), 4)}')
+                    LOG.info(f'mean fixed loss:     {np.round(np.mean(fixed_loss_trace), 4)}')
                     # This should obviously remain constant
-                    LOG.info(f'mean random loss:    {np.round(np.mean(random_loss_trace), 2)}')
+                    LOG.info(f'mean random loss:    {np.round(np.mean(random_loss_trace), 4)}')
                     if self.data_type == 'categorical':
-                        LOG.info(f'mean acc.:           {np.round(np.mean(metric_trace), 2)}')
+                        LOG.info(f'mean acc.:           {np.round(np.mean(metric_trace), 4)}')
                     elif self.data_type == 'unit':
-                        LOG.info(f'mean error:          {np.round(np.mean(metric_trace), 2)}')
-                    LOG.info(f'prop. best possible: {np.round(np.mean(best_trace), 2)}')
+                        LOG.info(f'mean error:          {np.round(np.mean(metric_trace), 4)}')
+                    LOG.info(f'prop. best possible: {np.round(np.mean(best_trace), 4)}')
                     LOG.info('')
                     
                     LOG.info('')
@@ -150,6 +153,7 @@ class NaturalLanguageInferenceTrainer:
                     metric_trace = []
                     best_trace = []
 
+                """
                 # Evaluate moving average loss
                 if len(all_loss_trace) == MOVING_AVERAGE_WINDOW_SIZE:
                     prev_moving_average_loss = np.mean(all_loss_trace)
@@ -168,9 +172,21 @@ class NaturalLanguageInferenceTrainer:
                         LOG.info(f'Reached {TOLERANCE} minibatches without '\
                                  f'improvement. Stopping early')
                         return self.nli.eval()
+                """
                 
                 loss.backward()
                 optimizer.step()
+
+            cur_epoch_mean_loss = np.mean(epoch_loss_trace)
+            print(f'cur mean loss: {cur_epoch_mean_loss}')
+            print(f'prev mean loss: {prev_epoch_mean_loss}')
+            if prev_epoch_mean_loss - cur_epoch_mean_loss > 0.01:
+                prev_epoch_mean_loss = cur_epoch_mean_loss
+            else:
+                LOG.info('No performance improvement over previous epoch. '\
+                         'Stopping early.')
+                return self.nli
+
                 
         return self.nli.eval()
 

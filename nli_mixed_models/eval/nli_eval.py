@@ -101,11 +101,11 @@ class NaturalLanguageInferenceEval:
             best_trace.append(1 - (error-best)/best)
 
         # Calculate and return mean of metrics across all batches
-        loss_mean = np.round(np.mean(loss_trace), 2)
-        fixed_loss_mean = np.round(np.mean(fixed_loss_trace), 2)
-        random_loss_mean = np.round(np.mean(random_loss_trace), 2)
-        metric_mean = np.round(np.mean(metric_trace), 2)
-        best_mean = np.round(np.mean(best_trace), 2)
+        loss_mean = np.round(np.mean(loss_trace), 4)
+        fixed_loss_mean = np.round(np.mean(fixed_loss_trace), 4)
+        random_loss_mean = np.round(np.mean(random_loss_trace), 4)
+        metric_mean = np.round(np.mean(metric_trace), 4)
+        best_mean = np.round(np.mean(best_trace), 4)
 
         return loss_mean, fixed_loss_mean, random_loss_mean, metric_mean, best_mean
 

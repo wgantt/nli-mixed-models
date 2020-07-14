@@ -58,7 +58,7 @@ def main(args):
             # Determine which subtask can be used
             if setting == 'standard':
                 subtask = 'a'
-            elif split_type == 'participant':
+            elif split_type == 'annotator':
                 subtask = 'b'
             else:
                 subtask = settings['subtask']
@@ -72,6 +72,12 @@ def main(args):
             random_loss_all = []
             acc_all = []
             best_all = []
+
+            loss_all_b = []
+            fixed_loss_all_b = []
+            random_loss_all_b = []
+            acc_all_b = []
+            best_all_b = []
             for i in range(k_folds):
 
                 # Dump current training settings
@@ -108,8 +114,9 @@ def main(args):
                     save_model_with_args(params, cat_model, hyperparams, checkpoint_dir, model_name)
                     LOG.info('Model saved.')
 
-                # Evaluate the model on the test fold
-                cnli_eval = CategoricalEval(cat_model, subtask, device=device)
+                # Evaluate the model on the test fold on subtask 'a'
+                LOG.info('Evaluating subtask a')
+                cnli_eval = CategoricalEval(cat_model, 'a', device=device)
                 loss_mean, fixed_loss_mean, random_loss_mean, acc_mean, best_mean = \
                     cnli_eval.eval(test_data, trainparams['batch_size'])
                 loss_all.append(loss_mean)
@@ -117,7 +124,24 @@ def main(args):
                 random_loss_all.append(random_loss_mean)
                 acc_all.append(acc_mean)
                 best_all.append(best_mean)
-                LOG.info(f'Test results for fold {i}')
+                LOG.info(f'Test results for fold {i}, subtask a')
+                LOG.info(f'Mean loss:           {loss_mean}')
+                LOG.info(f'Mean fixed loss:     {fixed_loss_mean}')
+                LOG.info(f'Mean random loss:    {random_loss_mean}')
+                LOG.info(f'Mean accuracy:       {acc_mean}')
+                LOG.info(f'Prop. best possible: {best_mean}')
+
+                # Evaluate the model on the test fold on subtask 'b'
+                LOG.info('Evaluating subtask b')
+                cnli_eval = CategoricalEval(cat_model, 'b', device=device)
+                loss_mean, fixed_loss_mean, random_loss_mean, acc_mean, best_mean = \
+                    cnli_eval.eval(test_data, trainparams['batch_size'])
+                loss_all_b.append(loss_mean)
+                fixed_loss_all_b.append(fixed_loss_mean)
+                random_loss_all_b.append(random_loss_mean)
+                acc_all_b.append(acc_mean)
+                best_all_b.append(best_mean)
+                LOG.info(f'Test results for fold {i}, subtask b')
                 LOG.info(f'Mean loss:           {loss_mean}')
                 LOG.info(f'Mean fixed loss:     {fixed_loss_mean}')
                 LOG.info(f'Mean random loss:    {random_loss_mean}')
@@ -125,11 +149,18 @@ def main(args):
                 LOG.info(f'Prop. best possible: {best_mean}')
 
             LOG.info('Finished k-fold cross evaluation.')
-            LOG.info(f'Mean loss:           {np.round(np.mean(loss_all), 2)}')
-            LOG.info(f'Mean fixed loss:           {np.round(np.mean(fixed_loss_all), 2)}')
-            LOG.info(f'Mean random loss:           {np.round(np.mean(random_loss_all), 2)}')
-            LOG.info(f'Mean accuracy:       {np.round(np.mean(acc_all), 2)}')
-            LOG.info(f'Prop. best possible: {np.round(np.mean(best_all), 2)}')
+            LOG.info('Subtask a results:')
+            LOG.info(f'Mean loss:           {np.round(np.mean(loss_all), 4)}')
+            LOG.info(f'Mean fixed loss:           {np.round(np.mean(fixed_loss_all), 4)}')
+            LOG.info(f'Mean random loss:           {np.round(np.mean(random_loss_all), 4)}')
+            LOG.info(f'Mean accuracy:       {np.round(np.mean(acc_all), 4)}')
+            LOG.info(f'Prop. best possible: {np.round(np.mean(best_all), 4)}')
+            LOG.info('Subtask b results:')
+            LOG.info(f'Mean loss:           {np.round(np.mean(loss_all_b), 4)}')
+            LOG.info(f'Mean fixed loss:           {np.round(np.mean(fixed_loss_all_b), 4)}')
+            LOG.info(f'Mean random loss:           {np.round(np.mean(random_loss_all_b), 4)}')
+            LOG.info(f'Mean accuracy:       {np.round(np.mean(acc_all_b), 4)}')
+            LOG.info(f'Prop. best possible: {np.round(np.mean(best_all_b), 4)}')
 
 
 if __name__ == '__main__':
