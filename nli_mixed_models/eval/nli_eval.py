@@ -67,7 +67,7 @@ class NaturalLanguageInferenceEval:
             modal_response = torch.LongTensor(items.modal_response.values).to(self.device)
           else:
             target = torch.FloatTensor(items.target.values).to(self.device)
-            modal_response = torch.FloatTensor(items.target.values).to(self.device)
+            modal_response = torch.FloatTensor(items.modal_response.values).to(self.device)
 
           # Embed items    
           embedding = self.nli.embed(items)
