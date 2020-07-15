@@ -19,16 +19,11 @@ from scripts.eval_utils import (
     accuracy,
     absolute_error,
     accuracy_best,
-    absolute_error_best
+    absolute_error_best,
 )
 from torch.distributions import Beta
 
 LOG = setup_logging()
-
-# Ideally, these should be parameters of the trainer itself, but didn't
-# want to take the time to do the refactoring. -W.G.
-MOVING_AVERAGE_WINDOW_SIZE = 100
-TOLERANCE = 100
 
 class NaturalLanguageInferenceTrainer:
     # TODO: This could probably be made a bit neater by abstracting
@@ -97,17 +92,23 @@ class NaturalLanguageInferenceTrainer:
                     participant = None
 
                 target = self.TARGET_TYPE(items.target.values).to(self.device)
+                modal_response = self.TARGET_TYPE(items.modal_response.values).to(self.device)
                 embedding = self.nli.embed(items).to(self.device)
                 
-                if self.MODEL_CLASS == UnitRandomInterceptsBeta or \
-                   self.MODEL_CLASS == UnitRandomSlopes:
-                    alpha, beta, prediction, random_loss = self.nli(embedding, participant)
+                if  self.MODEL_CLASS == UnitRandomSlopes:
+                    prediction, random_loss = self.nli(embedding, participant)
                     random_loss = random_loss if isinstance(random_loss, float) else random_loss.item()
                     fixed_loss = lossfunc(alpha, beta, target)
                 else:
                     prediction, random_loss = self.nli(embedding, participant)
                     random_loss = random_loss if isinstance(random_loss, float) else random_loss.item()
-                    fixed_loss = lossfunc(prediction, target)
+                    if self.data_type == 'unit':
+                        # Trainer computes the mode of the beta distribution as the prediction
+                        alpha, beta = prediction
+                        prediction = self.TARGET_TYPE(beta_mode(alpha, beta)).to(self.device)
+                        fixed_loss = lossfunc(alpha, beta, target)
+                    else:
+                        fixed_loss = lossfunc(prediction, target)
                 
                 loss = fixed_loss + random_loss
                 
@@ -127,8 +128,9 @@ class NaturalLanguageInferenceTrainer:
                     
                 elif self.data_type == 'unit':
                     error = absolute_error(prediction, target)
-                    best = absolute_error_best(items)
+                    best = absolute_error(modal_response, target)
                     metric_trace.append(error)
+                    # best_trace.append(best)
                     best_trace.append(1 - (error-best)/best)
                 
                 if not (batch % verbosity):
@@ -142,6 +144,10 @@ class NaturalLanguageInferenceTrainer:
                         LOG.info(f'mean acc.:           {np.round(np.mean(metric_trace), 4)}')
                     elif self.data_type == 'unit':
                         LOG.info(f'mean error:          {np.round(np.mean(metric_trace), 4)}')
+                        # LOG.info(f'shift:               {self.nli.standard_shift.data}')
+                        # LOG.info(f'variance, shift mean:          {self.nli.random_effects.mean(0)}')
+                        # LOG.info(f'variance, shift std:           {self.nli.random_effects.std(0)}')
+                       
                     LOG.info(f'prop. best possible: {np.round(np.mean(best_trace), 4)}')
                     LOG.info('')
                     
@@ -152,34 +158,13 @@ class NaturalLanguageInferenceTrainer:
                     random_loss_trace = []
                     metric_trace = []
                     best_trace = []
-
-                """
-                # Evaluate moving average loss
-                if len(all_loss_trace) == MOVING_AVERAGE_WINDOW_SIZE:
-                    prev_moving_average_loss = np.mean(all_loss_trace)
-                elif len(all_loss_trace) > MOVING_AVERAGE_WINDOW_SIZE:
-                    # Compute the moving average of the loss
-                    cur_moving_average_loss = \
-                        np.mean(all_loss_trace[-MOVING_AVERAGE_WINDOW_SIZE:])
-                    # Determine whether there was any improvement or not
-                    if cur_moving_average_loss >= prev_moving_average_loss:
-                        iters_without_improvement += 1
-                    else:
-                        prev_moving_average_loss = cur_moving_average_loss
-                        iters_without_improvement = 0
-                    # Early stopping condition
-                    if iters_without_improvement == TOLERANCE:
-                        LOG.info(f'Reached {TOLERANCE} minibatches without '\
-                                 f'improvement. Stopping early')
-                        return self.nli.eval()
-                """
                 
                 loss.backward()
                 optimizer.step()
 
             cur_epoch_mean_loss = np.mean(epoch_loss_trace)
-            print(f'cur mean loss: {cur_epoch_mean_loss}')
-            print(f'prev mean loss: {prev_epoch_mean_loss}')
+            print(f'prev epoch mean loss: {prev_epoch_mean_loss}')
+            print(f'cur epoch mean loss: {cur_epoch_mean_loss}')
             if prev_epoch_mean_loss - cur_epoch_mean_loss > 0.01:
                 prev_epoch_mean_loss = cur_epoch_mean_loss
             else:
@@ -207,6 +192,25 @@ class BetaLogProbLoss(torch.nn.Module):
         # Return log probability of beta distribution (using adjusted targets)
         return -torch.mean(Beta(alphas, betas).log_prob(targets_adj))
 
+def beta_mode(alpha, beta):
+    """Compute the mode of the beta distribution"""
+    modes = []
+    for a, b in zip(alpha, beta):
+        if a > 1 and b > 1:
+            modes.append((a - 1)/(a + b - 2))
+        elif a == 1 and b == 1:
+            # This can technically be any value in (0,1)
+            modes.append(0.5)
+        elif a < 1 and b < 1:
+            # Can be either 0 or 1. We pick 0.
+            modes.append(0)
+        elif a <= 1 and b > 1:
+            modes.append(0)
+        elif a > 1 and b <= 1:
+            modes.append(1)
+        else:
+            raise ValueError('Unable to compute beta mode!')
+    return modes
 
 # Unit models
 class UnitTrainer(NaturalLanguageInferenceTrainer):

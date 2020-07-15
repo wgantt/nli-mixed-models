@@ -16,12 +16,14 @@ from ..modules.nli_random_slopes import (
     UnitRandomSlopes,
     CategoricalRandomSlopes
 )
-from ..trainers.nli_trainer import BetaLogProbLoss
+from ..trainers.nli_trainer import (
+    BetaLogProbLoss,
+    beta_mode
+)
 from scripts.eval_utils import (
     accuracy,
     absolute_error,
     accuracy_best,
-    absolute_error_best
 )
 from torch.distributions import Beta
 
@@ -62,8 +64,10 @@ class NaturalLanguageInferenceEval:
           # Get target values of appropriate type
           if isinstance(self.nli, CategoricalRandomIntercepts) or isinstance(self.nli, CategoricalRandomSlopes):
             target = torch.LongTensor(items.target.values).to(self.device)
+            modal_response = torch.LongTensor(items.modal_response.values).to(self.device)
           else:
             target = torch.FloatTensor(items.target.values).to(self.device)
+            modal_response = torch.FloatTensor(items.target.values).to(self.device)
 
           # Embed items    
           embedding = self.nli.embed(items)
@@ -71,13 +75,15 @@ class NaturalLanguageInferenceEval:
           # Calculate model prediction and compute fixed & random loss
           if isinstance(self.nli, UnitRandomInterceptsBeta) or \
              isinstance(self.nli, UnitRandomSlopes):
-            alpha, beta, prediction, random_loss = self.nli(embedding, participant)
+            prediction, random_loss = self.nli(embedding, participant)
+            alpha, beta = prediction
+            prediction = self.TARGET_TYPE(beta_mode(alpha, beta)).to(self.device)
             fixed_loss = self.lossfunc(alpha, beta, target)       
-            random_loss = random_loss if isinstance(random_loss, float) else random_loss.item()
           else:
             prediction, random_loss = self.nli(embedding, participant)
-            random_loss = random_loss if isinstance(random_loss, float) else random_loss.item()
             fixed_loss = self.lossfunc(prediction, target)
+
+          random_loss = random_loss if isinstance(random_loss, float) else random_loss.item()
 
           # Add total loss to trace
           loss = fixed_loss + random_loss
@@ -96,7 +102,7 @@ class NaturalLanguageInferenceEval:
           # If unit, calculate absolute error
           else:
             error = absolute_error(prediction, target)
-            best = absolute_error_best(items)
+            best = absolute_error(modal_response, target)
             metric_trace.append(error)
             best_trace.append(1 - (error-best)/best)
 

@@ -188,7 +188,7 @@ def load_neg_raising():
 
 	# We will be use a binary cross entrop loss in the models, and the best
 	# possible response for this loss is the mean
-	neg['modal_response'] = neg.groupby(['verb', 'frame', 'tense', 'subject']).negraising.transform(np.mean)
+	neg['modal_response'] = neg.groupby(['verb', 'frame', 'tense', 'subject']).negraising.transform(np.median)
 
 	return neg
 

@@ -200,7 +200,7 @@ class UnitRandomSlopes(RandomSlopesModel):
         # Extended setting subtask (b): use mean variance across participants.
         if participant is None:
           mu = mean
-          nu = torch.exp(self.nu_shift + self.variance.mean(0))
+          nu = torch.exp(self.nu_shift)
         # Extended setting subtask (a).
         else:
           mu = mean

@@ -74,6 +74,11 @@ def main(args):
             random_loss_all = []
             error_all = []
             best_all = []
+            loss_all_b = []
+            fixed_loss_all_b = []
+            random_loss_all_b = []
+            error_all_b = []
+            best_all_b = []
             for i in range(k_folds):
 
                 # Dump current training settings
@@ -114,16 +119,33 @@ def main(args):
 
                 # Evaluate the model on the test fold
                 if settings['use_beta_distribution']:
-                    unli_eval = UnitBetaEval(unit_model, subtask, device=device)
+                    unli_eval = UnitBetaEval(unit_model, 'a', device=device)
+                    unli_eval_b = UnitBetaEval(unit_model, 'b', device=device)
                 else:
                     unli_eval = UnitEval(unit_model, subtask, device=device)
+
+                LOG.info('Evaluating subtask a')
                 loss_mean, fixed_loss_mean, random_loss_mean, error_mean, best_mean = unli_eval.eval(test_data, trainparams['batch_size'])
                 loss_all.append(loss_mean)
                 fixed_loss_all.append(fixed_loss_mean)
                 random_loss_all.append(random_loss_mean)
                 error_all.append(error_mean)
                 best_all.append(best_mean)
-                LOG.info(f'Test results for fold {i}')
+                LOG.info(f'Test results for fold {i}, subtask a')
+                LOG.info(f'Mean loss:           {loss_mean}')
+                LOG.info(f'Mean fixed loss:     {fixed_loss_mean}')
+                LOG.info(f'Mean random loss:    {random_loss_mean}')
+                LOG.info(f'Mean error:       {error_mean}')
+                LOG.info(f'Prop. best possible: {best_mean}')
+
+                LOG.info('Evaluating subtask b')
+                loss_mean, fixed_loss_mean, random_loss_mean, error_mean, best_mean = unli_eval_b.eval(test_data, trainparams['batch_size'])
+                loss_all_b.append(loss_mean)
+                fixed_loss_all_b.append(fixed_loss_mean)
+                random_loss_all_b.append(random_loss_mean)
+                error_all_b.append(error_mean)
+                best_all_b.append(best_mean)
+                LOG.info(f'Test results for fold {i}, subtask b')
                 LOG.info(f'Mean loss:           {loss_mean}')
                 LOG.info(f'Mean fixed loss:     {fixed_loss_mean}')
                 LOG.info(f'Mean random loss:    {random_loss_mean}')
@@ -131,11 +153,18 @@ def main(args):
                 LOG.info(f'Prop. best possible: {best_mean}')
 
             LOG.info('Finished k-fold cross evaluation.')
-            LOG.info(f'Mean loss:           {np.round(np.mean(loss_all), 2)}')
-            LOG.info(f'Mean fixed loss:     {np.round(np.mean(fixed_loss_all), 2)}')
-            LOG.info(f'Mean random loss:    {np.round(np.mean(random_loss_all), 2)}')
-            LOG.info(f'Mean error:       {np.round(np.mean(error_all), 2)}')
-            LOG.info(f'Prop. best possible: {np.round(np.mean(best_all), 2)}')
+            LOG.info('Subtask a results:')
+            LOG.info(f'Mean loss:           {np.round(np.mean(loss_all), 4)}')
+            LOG.info(f'Mean fixed loss:     {np.round(np.mean(fixed_loss_all), 4)}')
+            LOG.info(f'Mean random loss:    {np.round(np.mean(random_loss_all), 4)}')
+            LOG.info(f'Mean error:       {np.round(np.mean(error_all), 4)}')
+            LOG.info(f'Prop. best possible: {np.round(np.mean(best_all), 4)}')
+            LOG.info('Subtask b results:')
+            LOG.info(f'Mean loss:           {np.round(np.mean(loss_all_b), 4)}')
+            LOG.info(f'Mean fixed loss:     {np.round(np.mean(fixed_loss_all_b), 4)}')
+            LOG.info(f'Mean random loss:    {np.round(np.mean(random_loss_all_b), 4)}')
+            LOG.info(f'Mean error:       {np.round(np.mean(error_all_b), 4)}')
+            LOG.info(f'Prop. best possible: {np.round(np.mean(best_all_b), 4)}')
 
 
 if __name__ == '__main__':

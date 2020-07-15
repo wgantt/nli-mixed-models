@@ -158,7 +158,6 @@ class UnitRandomInterceptsBeta(RandomInterceptsModel):
         self.nu_shift = Parameter(torch.tensor([0.]))
 
         if self.setting == 'standard':
-            self.standard_variance = Parameter(torch.tensor([1.]))
             self.standard_shift = Parameter(torch.tensor([0.]))
 
     def _initialize_random_effects(self):
@@ -169,10 +168,7 @@ class UnitRandomInterceptsBeta(RandomInterceptsModel):
         return torch.randn(self.n_participants, 2)
 
     def _random_effects(self):
-        random_variance = self.random_effects[:,0]
-        random_shift = self.random_effects[:,1] - self.random_effects[:,1].mean(0)
-
-        return random_shift, random_variance
+        return self.random_effects - self.random_effects.mean(0)[None,:]
 
     def _link_function(self, fixed, random, participant):
         # Standard setting
@@ -184,23 +180,23 @@ class UnitRandomInterceptsBeta(RandomInterceptsModel):
 
             # Mu and nu used to calculate the parameters for the beta distribution
             mu = mean
-            nu = torch.exp(self.nu_shift + self.standard_variance)
+            nu = torch.exp(self.nu_shift)
 
         # Extended setting subtask (b): assume mean annotator, so use mean
         # of random effects for prediction.
         elif participant is None:
-            random_shift, random_variance = random
+            random_shift, random_variance = random[:,0], random[:,1]
 
             # This is the mean of the beta distribution
             mean = self.squashing_function(fixed + random_shift.mean(0)).squeeze(1)
 
             # Mu and nu used to calculate the parameters for the beta distribution
             mu = mean
-            nu = torch.exp(self.nu_shift + random_variance.mean(0))
+            nu = torch.exp(self.nu_shift)
 
         # Extended setting subtask (a).
         else:
-            random_shift, random_variance = random
+            random_shift, random_variance = random[:,0], random[:,1]
 
             # This is the mean of the beta distribution
             mean = self.squashing_function(fixed + random_shift[participant][:,None]).squeeze(1)
@@ -216,35 +212,14 @@ class UnitRandomInterceptsBeta(RandomInterceptsModel):
 
         # The prediction is just the expected value for the beta
         # distribution whose parameters we've just estimated.
-        return alpha, beta, alpha / (alpha + beta)
+        return alpha, beta
 
     def _random_loss(self, random):
-        # For the random loss, we jointly model both random effects components,
-        # assuming they're distributed as a MultivariateNormal
-        random_shift, random_variance = random
-        combined = torch.cat([random_variance.unsqueeze(1), random_shift.unsqueeze(1)], dim=1)
 
         # Parameter estimates for the prior
-        mean = combined.mean(0)
-        cov = torch.matmul(torch.transpose(combined, 1, 0), combined) / (self.n_participants - 1)
+        mean = random.mean(0)
+        cov = torch.matmul(torch.transpose(random, 1, 0), random) / (self.n_participants - 1)
         invcov = torch.inverse(cov)
-        return torch.matmul(torch.matmul(combined.unsqueeze(1), invcov), \
-                            torch.transpose(combined.unsqueeze(1), 1, 2)).mean(0)
-
-
-    def forward(self, embeddings, participant=None) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Need to override forward function in order to return alpha and beta,
-           which are used to compute the log likelihood of the observed values
-        """
-        fixed = self.predictor(embeddings.mean(1))
-        
-        if self.setting == 'standard':
-            random = None
-            random_loss = 0.
-        else:
-            random = self._random_effects()
-            random_loss = self._random_loss(random)
-        
-        alpha, beta, prediction = self._link_function(fixed, random, participant)
-        return alpha, beta, prediction, random_loss
+        return torch.matmul(torch.matmul(random.unsqueeze(1), invcov), \
+                            torch.transpose(random.unsqueeze(1), 1, 2)).mean(0)
 
