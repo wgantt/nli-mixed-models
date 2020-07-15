@@ -153,6 +153,10 @@ class UnitRandomInterceptsBeta(RandomInterceptsModel):
 
         # The squashing function to bound continuous outputs to [0,1]
         self.squashing_function = sigmoid
+
+        # A fixed shift term for calculating nu when parametrizing the beta distribution
+        self.nu_shift = Parameter(torch.tensor([0.]))
+
         if self.setting == 'standard':
             self.standard_variance = Parameter(torch.tensor([1.]))
             self.standard_shift = Parameter(torch.tensor([0.]))
@@ -178,12 +182,9 @@ class UnitRandomInterceptsBeta(RandomInterceptsModel):
             # but obviously will vary somewhat during training
             mean = self.squashing_function(fixed + self.standard_shift).squeeze(1)
 
-            # Parameter estimates for the beta distribution. The variance
-            # in the standard setting is initialized to 1, but may vary as
-            # with the shifting term
-            variance = torch.abs(self.standard_variance)
-            alpha = mean * variance
-            beta = (1 - mean) * variance
+            # Mu and nu used to calculate the parameters for the beta distribution
+            mu = mean
+            nu = torch.exp(self.nu_shift + self.standard_variance)
 
         # Extended setting subtask (b): assume mean annotator, so use mean
         # of random effects for prediction.
@@ -193,12 +194,9 @@ class UnitRandomInterceptsBeta(RandomInterceptsModel):
             # This is the mean of the beta distribution
             mean = self.squashing_function(fixed + random_shift.mean(0)).squeeze(1)
 
-            # Parameter estimates for the beta distribution. These are
-            # estimated from the mean and variance. Since both components
-            # are initialized by randn, we use abs to enforce non-negativity
-            # for random_variance
-            alpha = mean * torch.abs(random_variance.mean(0))
-            beta = (1 - mean) * torch.abs(random_variance.mean(0))
+            # Mu and nu used to calculate the parameters for the beta distribution
+            mu = mean
+            nu = torch.exp(self.nu_shift + random_variance.mean(0))
 
         # Extended setting subtask (a).
         else:
@@ -207,12 +205,14 @@ class UnitRandomInterceptsBeta(RandomInterceptsModel):
             # This is the mean of the beta distribution
             mean = self.squashing_function(fixed + random_shift[participant][:,None]).squeeze(1)
 
-            # Parameter estimates for the beta distribution. These are
-            # estimated from the mean and variance. Since both components
-            # are initialized by randn, we use abs to enforce non-negativity
-            # for random_variance
-            alpha = mean * torch.abs(random_variance[participant])
-            beta = (1 - mean) * torch.abs(random_variance[participant])
+            # Mu and nu used to calculate the parameters for the beta distribution
+            mu = mean
+            nu = torch.exp(self.nu_shift + random_variance[participant])
+
+        # Parameter estimates for the beta distribution. These are
+        # estimated from the mean and variance.
+        alpha = mu * nu
+        beta = (1 - mu) * nu
 
         # The prediction is just the expected value for the beta
         # distribution whose parameters we've just estimated.

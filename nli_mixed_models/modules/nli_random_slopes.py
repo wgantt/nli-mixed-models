@@ -196,15 +196,20 @@ class UnitRandomSlopes(RandomSlopesModel):
         # squashing function.
         mean = self.squashing_function(predictions).squeeze(1)
 
+        # Mu and nu used to calculate the parameters for the beta distribution
         # Extended setting subtask (b): use mean variance across participants.
         if participant is None:
-          variance = torch.abs(self.variance.mean(0))
+          mu = mean
+          nu = torch.exp(self.nu_shift + self.variance.mean(0))
         # Extended setting subtask (a).
         else:
-          variance = torch.abs(self.variance[participant])
+          mu = mean
+          nu = torch.exp(self.nu_shift + self.variance[participant])
 
-        alpha = mean * variance
-        beta = (1 - mean) * variance
+        # Parameter estimates for the beta distribution. These are
+        # estimated from the mean and variance.
+        alpha = mu * nu
+        beta = (1 - mu) * nu
         return alpha, beta, alpha / (alpha + beta)
     
 
