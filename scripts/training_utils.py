@@ -122,6 +122,13 @@ def load_veridicality():
 	"""
 	df['participant'] = df.participant.astype('category').cat.codes
 
+	# Calculate accuracy of zero-rule classifier (i.e. predicting majority class)
+	mode_prediction = torch.ones(df.target.shape) * mode(df.target)
+	mode_target = torch.tensor(df.target.values)
+	mode_accuracy = (mode_prediction == mode_target).numpy().mean()
+	LOG.info('Majority class accuracy (MV):')
+	LOG.info(f"{mode_accuracy}")
+
 	# Lastly, we compute the modal response for each verb-frame pair. This
 	# will allow us to determine how well the model does in comparison to
 	# the best possible model.
