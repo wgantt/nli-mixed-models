@@ -91,24 +91,23 @@ class NaturalLanguageInferenceTrainer:
                 else:
                     participant = None
 
+                # Get targets, modal responses, and item embeddings
                 target = self.TARGET_TYPE(items.target.values).to(self.device)
                 modal_response = self.TARGET_TYPE(items.modal_response.values).to(self.device)
                 embedding = self.nli.embed(items).to(self.device)
-                
-                if  self.MODEL_CLASS == UnitRandomSlopes:
-                    prediction, random_loss = self.nli(embedding, participant)
-                    random_loss = random_loss if isinstance(random_loss, float) else random_loss.item()
+
+                # Get model prediction and random loss (converting the latter as appropriate)
+                prediction, random_loss = self.nli(embedding, participant)
+                random_loss = random_loss if isinstance(random_loss, float) else random_loss.item()
+
+                # If unit case, get final prediction by calculating mode of predicted beta distribution
+                if self.data_type == 'unit':
+                    alpha, beta = prediction
+                    prediction = self.TARGET_TYPE(beta_mode(alpha, beta)).to(self.device)
                     fixed_loss = lossfunc(alpha, beta, target)
+                # Otherwise, model returns predicted class directly
                 else:
-                    prediction, random_loss = self.nli(embedding, participant)
-                    random_loss = random_loss if isinstance(random_loss, float) else random_loss.item()
-                    if self.data_type == 'unit':
-                        # Trainer computes the mode of the beta distribution as the prediction
-                        alpha, beta = prediction
-                        prediction = self.TARGET_TYPE(beta_mode(alpha, beta)).to(self.device)
-                        fixed_loss = lossfunc(alpha, beta, target)
-                    else:
-                        fixed_loss = lossfunc(prediction, target)
+                    fixed_loss = lossfunc(prediction, target)
                 
                 loss = fixed_loss + random_loss
                 

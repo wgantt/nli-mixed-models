@@ -103,7 +103,7 @@ class RandomSlopesModel(NaturalLanguageInference):
         random_loss = self._random_loss(self._random_effects())
 
         # Return the prediction and the random loss
-        predictions = self._link_function(predictions)
+        predictions = self._link_function(predictions, participant)
         return predictions, random_loss
 
 
@@ -137,7 +137,7 @@ class CategoricalRandomSlopes(RandomSlopesModel):
         return self.random_effects - self.random_effects.mean(0)[None,:]
     
 
-    def _link_function(self, predictions):
+    def _link_function(self, predictions, participant):
         """Computes the link function for a given model configuration."""
 
         # 'predictions' contains the outputs from the individual annotator MLPs,
@@ -170,6 +170,9 @@ class UnitRandomSlopes(RandomSlopesModel):
                          n_participants, setting, device)
         self.squashing_function = sigmoid
         self._initialize_random_effects()
+
+        # A fixed shift term for calculating nu when parametrizing the beta distribution
+        self.nu_shift = Parameter(torch.tensor([0.]))
         
 
     def _initialize_random_effects(self):
@@ -210,7 +213,7 @@ class UnitRandomSlopes(RandomSlopesModel):
         # estimated from the mean and variance.
         alpha = mu * nu
         beta = (1 - mu) * nu
-        return alpha, beta, alpha / (alpha + beta)
+        return alpha, beta
     
 
     def _random_loss(self, random):
@@ -224,30 +227,5 @@ class UnitRandomSlopes(RandomSlopesModel):
         return torch.matmul(torch.matmul(combined.unsqueeze(1), invcov), \
                     torch.transpose(combined.unsqueeze(1), 1, 2)).mean(0)
 
-
-    def forward(self, embeddings, participant=None) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Need to override forward function in order to return alpha and beta,
-           which are used to compute the log likelihood of the observed values
-        """
-        # Shared base MLP with annotator-specific final linear layers. Not sure whether
-        # there's a clever way to vectorize this.
-        predictions = []
-        # Extended setting subtask (b): assume a mean annotator, so create a new predictor
-        # head using the mean parameters across the predictor heads.
-        # NOTE: only used in eval mode - cannot be used for training since autograd will not work.
-        if participant is None:
-          predictor_heads_mean = self._create_mean_predictor()
-          for e in embeddings:
-            predictions.append(predictor_heads_mean(self.predictor_base(e.mean(0))))
-        # Extended setting subtask (a).
-        else:
-          for p, e in zip(participant, embeddings):
-            predictions.append(self.predictor_heads[p](self.predictor_base(e.mean(0))))
-
-        predictions = torch.stack(predictions, dim=0)
-
-        random_loss = self._random_loss(self._random_effects())
-
-        alpha, beta, predictions = self._link_function(predictions, participant=participant)
-        return alpha, beta, predictions, random_loss
+    
 
