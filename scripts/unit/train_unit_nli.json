@@ -22,7 +22,6 @@
   "settings":{
     "use_random_slopes":false,
     "split_type":"random",
-    "k_folds":5,
-    "subtask":"a"
+    "k_folds":5
   }
 }

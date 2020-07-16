@@ -55,14 +55,6 @@ def main(args):
             data_file_name = checkpoint_dir + '/' + '-'.join([checkpoint_file_name, 'partition', split_type, 'data']) + '.csv'
             ver.to_csv(data_file_name, index=False)
 
-            # Determine which subtask can be used
-            if setting == 'standard':
-                subtask = 'a'
-            elif split_type == 'annotator':
-                subtask = 'b'
-            else:
-                subtask = settings['subtask']
-
             # Perform k-fold cross-validation
             # Note: we don't really need to be keeping track of the
             # random loss, since it should be constant. This is just
