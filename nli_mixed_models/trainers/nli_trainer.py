@@ -6,8 +6,7 @@ import pandas as pd
 from torch.optim import Adam
 from torch.nn import CrossEntropyLoss, BCEWithLogitsLoss
 from ..modules.nli_random_intercepts import (
-    UnitRandomInterceptsNormal,
-    UnitRandomInterceptsBeta,
+    UnitRandomIntercepts,
     CategoricalRandomIntercepts
 )
 from scripts.setup_logging import setup_logging
@@ -32,18 +31,25 @@ class NaturalLanguageInferenceTrainer:
     def __init__(self, n_participants: int, 
                  embedding_dim: int = 768, 
                  n_predictor_layers: int = 2,
+                 hidden_dim: int = 128,
                  setting: str = 'extended',
+                 use_sampling: bool = False,
+                 n_samples: int = 100,
                  device='cpu'):
         self.embedding_dim = embedding_dim
         self.n_predictor_layers = n_predictor_layers
+        self.hidden_dim = hidden_dim
         self.n_participants = n_participants
         self.setting = setting
         self.device = torch.device(device)
         self.nli = self.MODEL_CLASS(embedding_dim, 
                                     n_predictor_layers,
+                                    hidden_dim,
                                     self.OUTPUT_DIM, 
                                     n_participants,
                                     setting,
+                                    use_sampling,
+                                    n_samples,
                                     device).to(device)
         self.data_type = 'categorical' if \
             self.MODEL_CLASS is CategoricalRandomIntercepts or \
@@ -217,11 +223,8 @@ class UnitTrainer(NaturalLanguageInferenceTrainer):
     TARGET_TYPE = torch.FloatTensor
     OUTPUT_DIM = 1
 
-class UnitRandomInterceptsNormalTrainer(UnitTrainer):
-    MODEL_CLASS = UnitRandomInterceptsNormal
-
-class UnitRandomInterceptsBetaTrainer(UnitTrainer):
-    MODEL_CLASS = UnitRandomInterceptsBeta
+class UnitRandomInterceptsTrainer(UnitTrainer):
+    MODEL_CLASS = UnitRandomIntercepts
     LOSS_CLASS = BetaLogProbLoss
 
 class UnitRandomSlopesTrainer(UnitTrainer):

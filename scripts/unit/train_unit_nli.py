@@ -2,8 +2,7 @@ import argparse, json, torch
 import numpy as np
 
 from nli_mixed_models.trainers.nli_trainer import (
-    UnitRandomInterceptsNormalTrainer,
-    UnitRandomInterceptsBetaTrainer,
+    UnitRandomInterceptsTrainer,
     UnitRandomSlopesTrainer
     )
 from nli_mixed_models.eval.nli_eval import (
@@ -93,10 +92,8 @@ def main(args):
                 # the standard setting in addition to the extended one.
                 if hyperparams['setting'] == 'extended' and settings['use_random_slopes']:
                     unli_trainer = UnitRandomSlopesTrainer(**hyperparams)
-                elif settings['use_beta_distribution']:
-                    unli_trainer = UnitRandomInterceptsBetaTrainer(**hyperparams)
                 else:
-                    unli_trainer = UnitRandomInterceptsNormalTrainer(**hyperparams)
+                    unli_trainer = UnitRandomInterceptsTrainer(**hyperparams)
 
                 # Select the folds
                 test_fold = i

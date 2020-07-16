@@ -7,8 +7,7 @@ from torch.optim import Adam
 from torch.nn import CrossEntropyLoss, BCEWithLogitsLoss
 from ..modules.nli_base import NaturalLanguageInference
 from ..modules.nli_random_intercepts import (
-    UnitRandomInterceptsNormal,
-    UnitRandomInterceptsBeta,
+    UnitRandomIntercepts,
     CategoricalRandomIntercepts
 )
 from scripts.setup_logging import setup_logging
@@ -73,7 +72,7 @@ class NaturalLanguageInferenceEval:
           embedding = self.nli.embed(items)
 
           # Calculate model prediction and compute fixed & random loss
-          if isinstance(self.nli, UnitRandomInterceptsBeta) or \
+          if isinstance(self.nli, UnitRandomIntercepts) or \
              isinstance(self.nli, UnitRandomSlopes):
             prediction, random_loss = self.nli(embedding, participant)
             alpha, beta = prediction

@@ -9,8 +9,9 @@ from fairseq.data.data_utils import collate_tokens
 
 class NaturalLanguageInference(Module):
     
-    def __init__(self, embedding_dim: int, n_predictor_layers: int,  
+    def __init__(self, embedding_dim: int, n_predictor_layers: int, hidden_dim: int,
                  output_dim: int, n_participants: int, setting: str,
+                 use_sampling: bool, n_samples: int,
                  device=torch.device('cpu')):
         super().__init__()
         
@@ -18,9 +19,12 @@ class NaturalLanguageInference(Module):
         self.roberta.eval()
         self.embedding_dim = embedding_dim
         self.n_predictor_layers = n_predictor_layers
+        self.hidden_dim = hidden_dim
         self.output_dim = output_dim
         self.n_participants = n_participants
         self.setting = setting
+        self.use_sampling = use_sampling
+        self.n_samples = n_samples
         self.device = device
 
 

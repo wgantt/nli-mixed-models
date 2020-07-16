@@ -7,7 +7,10 @@
   "hyper":{
     "embedding_dim":[768],
     "n_predictor_layers":[1],
+    "hidden_dim":[128],
     "setting":["extended"],
+    "use_sampling":[true],
+    "n_samples":[100],
     "device":["cpu"]
   },
   "training":{
@@ -18,7 +21,6 @@
   },
   "settings":{
     "use_random_slopes":false,
-    "use_beta_distribution":true,
     "split_type":"random",
     "k_folds":5,
     "subtask":"a"
