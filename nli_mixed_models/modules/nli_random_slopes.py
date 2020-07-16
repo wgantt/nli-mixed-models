@@ -74,37 +74,78 @@ class RandomSlopesModel(NaturalLanguageInference):
       predictor_heads_mean.bias = Parameter(biases.mean(0))
       return predictor_heads_mean
 
+
+    def _create_sampled_predictor(self):
+      """Creates a new predictor using parameters sampled from the prior for random effects."""
+      # Sample parameters and extract weight and bias parameters from flattened list
+      sampled_params = MultivariateNormal(self.mean, self.cov).sample()
+      flattened_mlp_params = sampled_params[:((self.hidden_dim+1)*self.output_dim)]
+      mlp_params = flattened_mlp_params.reshape((self.output_dim, self.hidden_dim+1))
+      weight, bias = mlp_params[:, :-1], mlp_params[:, -1]
+      # Create new linear predictor and set weights/biases to sampled values
+      predictor_head_sampled = Linear(self.hidden_dim, self.output_dim)
+      predictor_head_sampled.weight = Parameter(weight)
+      predictor_head_sampled.bias = Parameter(bias)
+      return predictor_head_sampled
+
     
-    def forward(self, embeddings, participant=None) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Do a forward pass on the model. Returns a tuple (prediction, random_loss), where
-           random_loss is a loss associated with the prior over the random components
-        """
-        # Shared base MLP with annotator-specific final linear layers. Not sure whether
-        # there's a clever way to vectorize this.
+    def _get_stacked_predictions(self, embeddings, participant):
+        """Loops through embeddings and gets prediction for each, stacking the results."""
+        # NOTE: Not sure whether there's a clever way to vectorize this.
         predictions = []
+
         # Extended setting subtask (b): assume a mean annotator, so create a new predictor
         # head using the mean parameters across the predictor heads.
         # NOTE: only used in eval mode - cannot be used for training since autograd will not work.
         if participant is None:
-          predictor_heads_mean = self._create_mean_predictor()
-          for e in embeddings:
-            predictions.append(predictor_heads_mean(self.predictor_base(e.mean(0))))
+          # If using sampling, create a predictor head with parameters sampled from the random effects prior
+          if self.use_sampling:
+            predictor_head_sampled = self._create_sampled_predictor()
+            for e in embeddings:
+              predictions.append(predictor_head_sampled(self.predictor_base(e.mean(0))))
+          # Otherwise, create a predictor head with mean parameters
+          else:
+            predictor_heads_mean = self._create_mean_predictor()
+            for e in embeddings:
+              predictions.append(predictor_heads_mean(self.predictor_base(e.mean(0))))
+
         # Extended setting subtask (a).
         else:
           for p, e in zip(participant, embeddings):
             predictions.append(self.predictor_heads[p](self.predictor_base(e.mean(0))))
 
-        # 'fixed' is obviously something of a misnomer here, given that it's
-        # just computed from the separate annotator MLPs. 
+        # Stack predictions from separate annotator MLPs
         predictions = torch.stack(predictions, dim=0)
+        return predictions
 
-        # There is, however, still a random loss, which is just the prior over
-        # the (flattened) weights and biases of the MLPs.
+    
+    def forward(self, embeddings, participant=None) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Do a forward pass on the model. Returns a tuple (prediction, random_loss), where
+           random_loss is a loss associated with the prior over the random components
+        """
+        # The random loss is just the prior over the (flattened) weights and biases of the MLPs.
         random_loss = self._random_loss(self._random_effects())
 
-        # Return the prediction and the random loss
-        predictions = self._link_function(predictions, participant)
-        return predictions, random_loss
+        # If using sampling in subtask (b), generate some number of
+        # predictions and take the mean.
+        if participant is None and self.use_sampling:
+          predictions = []
+          for i in range(self.n_samples):
+            prediction_mlp = self._get_stacked_predictions(embeddings, participant)
+            predictions.append(self._link_function(prediction_mlp, participant))
+          # If unit case, predictions will be (alpha, beta) tuples
+          if all(isinstance(x, tuple) for x in predictions):
+            alpha = torch.stack([x[0] for x in predictions]).mean(0)
+            beta  = torch.stack([x[1] for x in predictions]).mean(0)
+            prediction = (alpha, beta)
+          else:
+            prediction = torch.stack(predictions).mean(0)
+        else:
+          # Get predictions from MLPs and pass through link function
+          prediction_mlp = self._get_stacked_predictions(embeddings, participant)
+          prediction = self._link_function(prediction_mlp, participant)
+
+        return prediction, random_loss
 
 
 
@@ -121,8 +162,8 @@ class CategoricalRandomSlopes(RandomSlopesModel):
         # The number of random effects per annotator is equal to the hidden dimension
         # times the output dimension (weights) plus the hidden dimension (bias).
         n_random_effects = ((self.hidden_dim + 1) * self.output_dim)
-        self.mean = torch.zeros(n_random_effects)
-        self.cov  = torch.zeros((n_random_effects, n_random_effects))
+        self.mean = torch.randn(n_random_effects)
+        self.cov  = torch.randn((n_random_effects, n_random_effects))
 
         self.random_effects = self._initialize_random_effects()
 
@@ -164,8 +205,6 @@ class CategoricalRandomSlopes(RandomSlopesModel):
         # the covariance should always be estimated from all annotators.
         self.mean = torch.zeros(random.shape[1])
         self.cov = torch.matmul(torch.transpose(random, 1, 0), random) / (self.n_participants - 1)
-        # mean: torch.Size([387])
-        # cov:  torch.Size([387, 387])
         invcov = torch.inverse(self.cov)
         return torch.matmul(torch.matmul(random.unsqueeze(1), invcov), \
                             torch.transpose(random.unsqueeze(1), 1, 2)).mean(0)
@@ -186,8 +225,8 @@ class UnitRandomSlopes(RandomSlopesModel):
         # times the output dimension (weights) plus the hidden dimension (bias), plus
         # random variance.
         n_random_effects = ((self.hidden_dim + 1) * self.output_dim) + 1
-        self.mean = torch.zeros(n_random_effects)
-        self.cov  = torch.zeros((n_random_effects, n_random_effects))
+        self.mean = torch.randn(n_random_effects)
+        self.cov  = torch.randn((n_random_effects, n_random_effects))
 
         self.squashing_function = sigmoid
         self._initialize_random_effects()
@@ -223,8 +262,13 @@ class UnitRandomSlopes(RandomSlopesModel):
         # Mu and nu used to calculate the parameters for the beta distribution
         # Extended setting subtask (b): use mean variance across participants.
         if participant is None:
+          # If using sampling, sample from random variance prior, otherwise set to 0
+          if self.use_sampling:
+            random_variance = MultivariateNormal(self.mean, self.cov).sample()[-1]
+          else:
+            random_variance = 0
           mu = mean
-          nu = torch.exp(self.nu_shift)
+          nu = torch.exp(self.nu_shift + random_variance)
         # Extended setting subtask (a).
         else:
           mu = mean

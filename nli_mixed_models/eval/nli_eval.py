@@ -117,11 +117,8 @@ class NaturalLanguageInferenceEval:
 
 # Unit eval
 class UnitEval(NaturalLanguageInferenceEval):
-    LOSS_CLASS = BCEWithLogitsLoss
-    TARGET_TYPE = torch.FloatTensor
-
-class UnitBetaEval(UnitEval):
     LOSS_CLASS = BetaLogProbLoss
+    TARGET_TYPE = torch.FloatTensor
 
 
 # Categorical eval

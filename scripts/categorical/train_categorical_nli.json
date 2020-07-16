@@ -9,7 +9,7 @@
     "n_predictor_layers":[1],
     "hidden_dim":[128],
     "setting":["extended"],
-    "use_sampling":[true],
+    "use_sampling":[false],
     "n_samples":[100],
     "device":["cpu"]
   },

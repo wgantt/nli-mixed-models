@@ -4,6 +4,7 @@ import pandas as pd
 from typing import Tuple
 from torch import cat, flatten, sigmoid
 from torch.nn import Module, ModuleList, Linear, ReLU, Sequential, Dropout, Parameter
+from torch.distributions.multivariate_normal import MultivariateNormal
 from fairseq.data.data_utils import collate_tokens
 
 from .nli_base import NaturalLanguageInference
@@ -58,12 +59,29 @@ class RandomInterceptsModel(NaturalLanguageInference):
         if self.setting == 'standard':
             random = None
             random_loss = 0.
+            prediction = self._link_function(fixed, random, participant)
+
         # The "extended" setting, where we have annotator random effects.
         else:
             random = self._random_effects()
             random_loss = self._random_loss(random)
         
-        prediction = self._link_function(fixed, random, participant)
+            # If using sampling in subtask (b), generate some number of
+            # predictions and take the mean.
+            if participant is None and self.use_sampling:
+                predictions = []
+                for i in range(self.n_samples):
+                    predictions.append(self._link_function(fixed, random, participant))
+                # If unit case, predictions will be (alpha, beta) tuples
+                if all(isinstance(x, tuple) for x in predictions):
+                    alpha = torch.stack([x[0] for x in predictions]).mean(0)
+                    beta  = torch.stack([x[1] for x in predictions]).mean(0)
+                    prediction = (alpha, beta)
+                else:
+                    prediction = torch.stack(predictions).mean(0)
+            else:
+                prediction = self._link_function(fixed, random, participant)
+
         return prediction, random_loss
 
 
@@ -101,10 +119,14 @@ class CategoricalRandomIntercepts(RandomInterceptsModel):
         # Standard setting: no participants, so no random effects.
         if self.setting == 'standard' or random is None:
             return fixed
-        # Extended setting subtask (b): assume mean annotator, so use mean
-        # of random effects for prediction (should be zero in this case).
+        # Extended setting subtask (b).
         elif participant is None:
-            return fixed + random.mean(0)[None,:]
+            # If using sampling, sample from random effects priors, otherwise use mean
+            if self.use_sampling:
+                random = MultivariateNormal(self.mean, self.cov).sample()[None,:]
+            else:
+                random = random.mean(0)[None,:]
+            return fixed + random
         # Extended setting subtask (a).
         else:
             return fixed + random[participant]
@@ -176,14 +198,19 @@ class UnitRandomIntercepts(RandomInterceptsModel):
         # Extended setting subtask (b): assume mean annotator, so use mean
         # of random effects for prediction.
         elif participant is None:
-            random_shift, random_variance = random[:,0], random[:,1]
+            # If using sampling, sample from random effects priors, otherwise use mean for random_shift
+            # and set random_variance to 0
+            if self.use_sampling:
+                random_shift, random_variance = MultivariateNormal(self.mean, self.cov).sample()
+            else:
+                random_shift, random_variance = random[:,0].mean(0), 0
 
             # This is the mean of the beta distribution
-            mean = self.squashing_function(fixed + random_shift.mean(0)).squeeze(1)
+            mean = self.squashing_function(fixed + random_shift).squeeze(1)
 
             # Mu and nu used to calculate the parameters for the beta distribution
             mu = mean
-            nu = torch.exp(self.nu_shift)
+            nu = torch.exp(self.nu_shift + random_variance)
 
         # Extended setting subtask (a).
         else:

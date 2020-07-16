@@ -6,8 +6,7 @@ from nli_mixed_models.trainers.nli_trainer import (
     UnitRandomSlopesTrainer
     )
 from nli_mixed_models.eval.nli_eval import (
-    UnitEval,
-    UnitBetaEval
+    UnitEval
 )
 from scripts.setup_logging import setup_logging
 from scripts.training_utils import (
@@ -115,11 +114,8 @@ def main(args):
                     LOG.info('Model saved.')
 
                 # Evaluate the model on the test fold
-                if settings['use_beta_distribution']:
-                    unli_eval = UnitBetaEval(unit_model, 'a', device=device)
-                    unli_eval_b = UnitBetaEval(unit_model, 'b', device=device)
-                else:
-                    unli_eval = UnitEval(unit_model, subtask, device=device)
+                unli_eval = UnitEval(unit_model, 'a', device=device)
+                unli_eval_b = UnitEval(unit_model, 'b', device=device)
 
                 LOG.info('Evaluating subtask a')
                 loss_mean, fixed_loss_mean, random_loss_mean, error_mean, best_mean = unli_eval.eval(test_data, trainparams['batch_size'])
