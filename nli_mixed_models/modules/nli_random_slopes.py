@@ -11,30 +11,33 @@ from .nli_base import NaturalLanguageInference
 
 class RandomSlopesModel(NaturalLanguageInference):
 
-    def __init__(self, embedding_dim: int, n_predictor_layers: int,  
+    def __init__(self, embedding_dim: int, n_predictor_layers: int, hidden_dim: int,
                  output_dim: int, n_participants: int, setting: str,
+                 use_sampling: bool, n_samples: int,
                  device=torch.device('cpu')):
-        super().__init__(embedding_dim, n_predictor_layers, output_dim,
-                         n_participants, setting, device)
+        super().__init__(embedding_dim, n_predictor_layers, hidden_dim, output_dim,
+                         n_participants, setting, use_sampling, n_samples, device)
+
         self.predictor_base, self.predictor_heads = self._initialize_predictor(self.n_participants)
 
 
-    def _initialize_predictor(self, n_participants, hidden_dim=128):
+    def _initialize_predictor(self, n_participants):
         """Creates MLP predictors that has annotator-specific
            final layers. Uses ReLU activation and a 0.5 dropout layer.
-
-           TODO: make hidden_dim a model parameter. Note that it must be
-           less than n_participants to avoid having a singular covariance
-           matrix when computing the prior over the predictor head weights. 
+           NOTE: hidden_dim must be less than n_participants to avoid
+           having a singular covariance matrix when computing the prior
+           over the predictor head weights. 
+           TODO: the above should probably be checked during initialization,
+           and an informative error returned if the condition fails.
         """
 
         # Shared base
-        predictor_base = Sequential(Linear(self.embedding_dim, hidden_dim),
+        predictor_base = Sequential(Linear(self.embedding_dim, self.hidden_dim),
                                     ReLU(),
                                     Dropout(0.5))
     
         # Annotator-specific final layers
-        predictor_heads = ModuleList([Linear(hidden_dim,
+        predictor_heads = ModuleList([Linear(self.hidden_dim,
                        self.output_dim) for _ in range(n_participants)])
 
         return predictor_base, predictor_heads
@@ -55,11 +58,8 @@ class RandomSlopesModel(NaturalLanguageInference):
         return torch.stack(random_effects)
 
 
-    def _create_mean_predictor(self, hidden_dim=128):
-      """Creates a new predictor using the mean parameters across the predictor heads.
-         TODO: once hidden_dim is made a model parameter, we can remove it in the function
-         arguments here.
-      """
+    def _create_mean_predictor(self):
+      """Creates a new predictor using the mean parameters across the predictor heads."""
       weights = []
       biases = []
       # Collect weights/biases from each predictor head and create tensors
@@ -69,7 +69,7 @@ class RandomSlopesModel(NaturalLanguageInference):
       weights = torch.stack(weights)
       biases = torch.stack(biases)
       # Create new linear predictor and set weights/biases to means
-      predictor_heads_mean = Linear(hidden_dim, self.output_dim)
+      predictor_heads_mean = Linear(self.hidden_dim, self.output_dim)
       predictor_heads_mean.weight = Parameter(weights.mean(0))
       predictor_heads_mean.bias = Parameter(biases.mean(0))
       return predictor_heads_mean
@@ -110,11 +110,20 @@ class RandomSlopesModel(NaturalLanguageInference):
 
 class CategoricalRandomSlopes(RandomSlopesModel):
 
-    def __init__(self, embedding_dim: int, n_predictor_layers: int,  
+    def __init__(self, embedding_dim: int, n_predictor_layers: int, hidden_dim: int, 
                  output_dim: int, n_participants: int, setting: str,
+                 use_sampling: bool, n_samples: int,
                  device=torch.device('cpu')):
-        super().__init__(embedding_dim, n_predictor_layers, output_dim,
-                         n_participants, setting, device)
+        super().__init__(embedding_dim, n_predictor_layers, hidden_dim, output_dim,
+                         n_participants, setting, use_sampling,
+                         n_samples, device)
+
+        # The number of random effects per annotator is equal to the hidden dimension
+        # times the output dimension (weights) plus the hidden dimension (bias).
+        n_random_effects = ((self.hidden_dim + 1) * self.output_dim)
+        self.mean = torch.zeros(n_random_effects)
+        self.cov  = torch.zeros((n_random_effects, n_random_effects))
+
         self.random_effects = self._initialize_random_effects()
 
     def _initialize_random_effects(self):
@@ -153,9 +162,11 @@ class CategoricalRandomSlopes(RandomSlopesModel):
         # or only over a subset. Currently random loss is computed over ALL annotators
         # at each iteration. TBD whether this makes a difference or not. Regardless,
         # the covariance should always be estimated from all annotators.
-        mean = torch.zeros(random.shape[1])
-        cov = torch.matmul(torch.transpose(random, 1, 0), random) / (self.n_participants - 1)
-        invcov = torch.inverse(cov)
+        self.mean = torch.zeros(random.shape[1])
+        self.cov = torch.matmul(torch.transpose(random, 1, 0), random) / (self.n_participants - 1)
+        # mean: torch.Size([387])
+        # cov:  torch.Size([387, 387])
+        invcov = torch.inverse(self.cov)
         return torch.matmul(torch.matmul(random.unsqueeze(1), invcov), \
                             torch.transpose(random.unsqueeze(1), 1, 2)).mean(0)
 
@@ -163,11 +174,21 @@ class CategoricalRandomSlopes(RandomSlopesModel):
 
 class UnitRandomSlopes(RandomSlopesModel):
 
-    def __init__(self, embedding_dim: int, n_predictor_layers: int,  
+    def __init__(self, embedding_dim: int, n_predictor_layers: int, hidden_dim: int,
                  output_dim: int, n_participants: int, setting: str,
+                 use_sampling: bool, n_samples: int,
                  device=torch.device('cpu')):
-        super().__init__(embedding_dim, n_predictor_layers, output_dim,
-                         n_participants, setting, device)
+        super().__init__(embedding_dim, n_predictor_layers, hidden_dim, output_dim,
+                         n_participants, setting, use_sampling,
+                         n_samples, device)
+
+        # The number of random effects per annotator is equal to the hidden dimension
+        # times the output dimension (weights) plus the hidden dimension (bias), plus
+        # random variance.
+        n_random_effects = ((self.hidden_dim + 1) * self.output_dim) + 1
+        self.mean = torch.zeros(n_random_effects)
+        self.cov  = torch.zeros((n_random_effects, n_random_effects))
+
         self.squashing_function = sigmoid
         self._initialize_random_effects()
 
@@ -221,9 +242,9 @@ class UnitRandomSlopes(RandomSlopesModel):
         # effects (weights + variance)
         weights, variance = random
         combined = torch.cat([weights, variance.unsqueeze(1)], dim=1)
-        mean = combined.mean(0)
-        cov = torch.matmul(torch.transpose(combined, 1, 0), combined) / (self.n_participants - 1)
-        invcov = torch.inverse(cov)
+        self.mean = combined.mean(0)
+        self.cov = torch.matmul(torch.transpose(combined, 1, 0), combined) / (self.n_participants - 1)
+        invcov = torch.inverse(self.cov)
         return torch.matmul(torch.matmul(combined.unsqueeze(1), invcov), \
                     torch.transpose(combined.unsqueeze(1), 1, 2)).mean(0)
 
