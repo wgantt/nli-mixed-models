@@ -63,6 +63,14 @@ def load_model_with_args(cls, ckpt_path):
     model.load_state_dict(ckpt_dict['state_dict'])
     return model, hyper_params
 
+def load_model_with_missing_hyperparams(cls, ckpt_path, missing_hyperparams):
+    ckpt_dict = torch.load(ckpt_path)
+    existing_hyperparams = ckpt_dict['curr_hyper']
+    all_hyperparams = {**existing_hyperparams, **missing_hyperparams}
+    model = cls(**all_hyperparams)
+    model.load_state_dict(ckpt_dict['state_dict'])
+    return model, all_hyperparams
+
 def mode(x):
     values, counts = np.unique(x, return_counts=True)
     return values[counts.argmax()]

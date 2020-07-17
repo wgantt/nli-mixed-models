@@ -50,6 +50,7 @@ class NaturalLanguageInferenceEval:
         random_loss_trace = []
         metric_trace = []
         best_trace = []
+        spearman_trace = []
 
         # Calculate metrics for each batch in test set
         for batch, items in test_data.groupby('batch_idx'):
@@ -90,13 +91,19 @@ class NaturalLanguageInferenceEval:
           fixed_loss_trace.append(fixed_loss.item())
           random_loss_trace.append(random_loss)
 
-          # If categorical, calculate accuracy
+          # If categorical, calculate accuracy (and Spearman's coefficient)
           if isinstance(self.nli, CategoricalRandomIntercepts) or \
             isinstance(self.nli, CategoricalRandomSlopes):
             acc = accuracy(prediction, target)
             best = accuracy_best(items)
             metric_trace.append(acc)
             best_trace.append(acc/best)
+
+            # Calculate Spearman
+            spearman_df = pd.DataFrame()
+            spearman_df['true'] = pd.Series(target.cpu().detach().numpy())
+            spearman_df['predicted'] = pd.Series(prediction.argmax(1).cpu().detach().numpy())
+
                     
           # If unit, calculate absolute error
           else:
@@ -105,14 +112,18 @@ class NaturalLanguageInferenceEval:
             metric_trace.append(error)
             best_trace.append(1 - (error-best)/best)
 
+          spearman = spearman_df.corr().iloc[0,1]
+          spearman_trace.append(spearman)
+
         # Calculate and return mean of metrics across all batches
         loss_mean = np.round(np.mean(loss_trace), 4)
         fixed_loss_mean = np.round(np.mean(fixed_loss_trace), 4)
         random_loss_mean = np.round(np.mean(random_loss_trace), 4)
         metric_mean = np.round(np.mean(metric_trace), 4)
         best_mean = np.round(np.mean(best_trace), 4)
+        spearman_mean = np.round(np.mean(spearman_trace), 4)
 
-        return loss_mean, fixed_loss_mean, random_loss_mean, metric_mean, best_mean
+        return loss_mean, fixed_loss_mean, random_loss_mean, metric_mean, best_mean, spearman_mean
 
 
 # Unit eval
