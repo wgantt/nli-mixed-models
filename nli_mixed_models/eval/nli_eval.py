@@ -52,6 +52,7 @@ class NaturalLanguageInferenceEval:
           metric_trace = []
           best_trace = []
           spearman_trace = []
+          spearman_best_trace = []
 
           # Calculate metrics for each batch in test set
           for batch, items in test_data.groupby('batch_idx'):
@@ -78,7 +79,9 @@ class NaturalLanguageInferenceEval:
                isinstance(self.nli, UnitRandomSlopes):
               prediction, random_loss = self.nli(embedding, participant)
               alpha, beta = prediction
-              prediction = self.TARGET_TYPE(beta_mode(alpha, beta)).to(self.device)
+              # prediction = self.TARGET_TYPE(beta_mode(alpha, beta)).to(self.device)
+              # prediction = self.TARGET_TYPE(alpha / (alpha + beta)).to(self.device)
+              prediction = alpha / (alpha + beta)
               fixed_loss = self.lossfunc(alpha, beta, target)       
             else:
               prediction, random_loss = self.nli(embedding, participant)
@@ -99,12 +102,6 @@ class NaturalLanguageInferenceEval:
               best = accuracy_best(items)
               metric_trace.append(acc)
               best_trace.append(acc/best)
-
-              # Calculate Spearman
-              spearman_df = pd.DataFrame()
-              spearman_df['true'] = pd.Series(target.cpu().detach().numpy())
-              spearman_df['predicted'] = pd.Series(prediction.argmax(1).cpu().detach().numpy())
-
                       
             # If unit, calculate absolute error
             else:
@@ -113,8 +110,15 @@ class NaturalLanguageInferenceEval:
               metric_trace.append(error)
               best_trace.append(1 - (error-best)/best)
 
-            spearman = spearman_df.corr().iloc[0,1]
-            spearman_trace.append(spearman)
+              # Calculate Spearman
+              spearman_df = pd.DataFrame()
+              spearman_df['true'] = pd.Series(target.cpu().detach().numpy())
+              spearman_df['predicted'] = pd.Series(prediction.cpu().detach().numpy())
+              spearman_df['best'] = pd.Series(modal_response.cpu().detach().numpy())
+              spearman = spearman_df[['true', 'predicted']].corr().iloc[0,1]
+              spearman_trace.append(spearman)
+              spearman_best = spearman_df[['true', 'best']].corr().iloc[0,1]
+              spearman_best_trace.append(spearman_best)
 
           # Calculate and return mean of metrics across all batches
           loss_mean = np.round(np.mean(loss_trace), 4)
@@ -123,8 +127,9 @@ class NaturalLanguageInferenceEval:
           metric_mean = np.round(np.mean(metric_trace), 4)
           best_mean = np.round(np.mean(best_trace), 4)
           spearman_mean = np.round(np.mean(spearman_trace), 4)
+          best_spearman_mean = np.round(np.mean(spearman_best_trace), 4)
 
-          return loss_mean, fixed_loss_mean, random_loss_mean, metric_mean, best_mean, spearman_mean
+          return loss_mean, fixed_loss_mean, random_loss_mean, metric_mean, best_mean, spearman_mean, best_spearman_mean
 
 
 # Unit eval

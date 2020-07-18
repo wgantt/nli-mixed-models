@@ -38,12 +38,12 @@ def load_old_style_model(ckpt_path, device):
 
 	# Determine the type of model
 	if 'categorical' in ckpt_path:
-		if 'random_intercepts' in ckpt_path:
+		if 'random_intercepts' in ckpt_path or 'standard' in ckpt_path:
 			model_cls = CategoricalRandomIntercepts
 		else:
 			model_cls = CategoricalRandomSlopes
 	elif 'unit' in ckpt_path:
-		if 'random_intercepts' in ckpt_path:
+		if 'random_intercepts' in ckpt_path or 'standard' in ckpt_path:
 			model_cls = UnitRandomIntercepts
 		else:
 			model_cls = UnitRandomSlopes
@@ -58,7 +58,7 @@ def load_old_style_model(ckpt_path, device):
 	missing_hyperparams = {
 		'hidden_dim': 128,
 		'output_dim': output_dim,
-		'use_sampling': True,
+		'use_sampling': False,
 		'n_samples': 10000
 	}
 
@@ -66,10 +66,17 @@ def load_old_style_model(ckpt_path, device):
 	model, hyper_params = load_model_with_missing_hyperparams(model_cls, ckpt_path, missing_hyperparams)
 
 	# Estimate the mean and the covariance from the saved random effects
-	random = model._random_effects()
 	model = model.to(torch.device(device))
-	model.mean = random.mean(0).to(torch.device(device))
-	model.cov = (torch.matmul(torch.transpose(random, 1, 0), random) / (model.n_participants - 1)).to(torch.device(device))
+	if 'random_intercepts' in ckpt_path:
+		random = model._random_effects()
+		model.mean = random.mean(0).to(torch.device(device))
+		model.cov = (torch.matmul(torch.transpose(random, 1, 0), random) / (model.n_participants - 1)).to(torch.device(device))
+	elif 'random_slopes' in ckpt_path:
+		weights, variance = model._random_effects()
+		combined = torch.cat([weights, variance.unsqueeze(1)], dim=1)
+		model.mean = combined.mean(0).to(torch.device(device))
+		model.cov = (torch.matmul(torch.transpose(combined, 1, 0), combined) / (model.n_participants - 1)).to(torch.device(device))
+
 	# model.cov = model.cov.to(device)
 	return model, hyper_params
 
@@ -82,33 +89,42 @@ def main(args):
 	fixed_loss_all = []
 	metric_all = []
 	best_all = []
+	spearman_all = []
+	best_spearman_all = []
 	for test_fold in range(NUM_FOLDS):
 		ckpt_file_name = ckpt_path + '/' + '-'.join([model_type, 'fold', str(test_fold), 'partition', args.partition]) + '.pt'
 		model, hyperparams = load_old_style_model(ckpt_file_name, args.device)
 		LOG.info(f'Evaluating {model.__class__.__name__} model on the {args.partition} partition with the following hyperparameters:')
 		LOG.info(json.dumps(hyperparams, indent=4))
 		test_data = data[data.fold == test_fold]
+		subtask = 'b' if args.partition == 'annotator' else 'a'
+		LOG.info(f'Evaluating subtask {subtask}')
 		if model_type == 'categorical':
-			nli_eval = CategoricalEval(model, 'b', device=args.device)
+			nli_eval = CategoricalEval(model, subtask, device=args.device)
 		else:
-			nli_eval = UnitEval(model, 'b', device=args.device)
-		loss_mean, fixed_loss_mean, random_loss_mean, metric_mean, best_mean, spearman_mean = \
+			nli_eval = UnitEval(model, subtask, device=args.device)
+		loss_mean, fixed_loss_mean, random_loss_mean, metric_mean, best_mean, spearman_mean, best_spearman_mean = \
 			nli_eval.eval(test_data, BATCH_SIZE)
 		fixed_loss_all.append(fixed_loss_mean)
 		metric_all.append(metric_mean)
 		best_all.append(best_mean)
-		LOG.info(f'Test results for fold {test_fold}, subtask b')
+		spearman_all.append(spearman_mean)
+		best_spearman_all.append(spearman_mean / best_spearman_mean)
+		LOG.info(f'Test results for fold {test_fold}, subtask a')
 		LOG.info(f'Mean fixed loss:     {fixed_loss_mean}')
 		LOG.info(f'Mean metric:         {metric_mean}')
 		LOG.info(f'Prop. best possible: {best_mean}')
-		# LOG.info(f'Mean Spearman:       {spearman_mean}')
+		LOG.info(f'Mean Spearman:       {spearman_mean}')
+		LOG.info(f'Best Spearman:       {best_spearman_mean}')
+		LOG.info(f'Prop. best Spearman: {spearman_mean / best_spearman_mean}')
 
 	LOG.info('Finished k-fold cross evaluation.')
 	LOG.info('Subtask b results:')
 	LOG.info(f'Mean fixed loss:           {np.round(np.mean(fixed_loss_all), 4)}')
 	LOG.info(f'Mean metric:       {np.round(np.mean(metric_all), 4)}')
 	LOG.info(f'Prop. best possible: {np.round(np.mean(best_all), 4)}')
-
+	LOG.info(f'Mean Spearman:       {np.round(np.mean(spearman_all), 4)}')
+	LOG.info(f'Prop. best spearman: {np.round(np.mean(best_spearman_all), 4)}')
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()

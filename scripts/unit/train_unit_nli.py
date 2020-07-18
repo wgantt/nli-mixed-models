@@ -64,11 +64,16 @@ def main(args):
             random_loss_all = []
             error_all = []
             best_all = []
+            spearman_all = []
+            best_spearman_all = []
+
             loss_all_b = []
             fixed_loss_all_b = []
             random_loss_all_b = []
             error_all_b = []
             best_all_b = []
+            spearman_all_b = []
+            best_spearman_all_b = []
             for i in range(k_folds):
 
                 # Dump current training settings
@@ -110,32 +115,39 @@ def main(args):
                 unli_eval_b = UnitEval(unit_model, 'b', device=device)
 
                 LOG.info('Evaluating subtask a')
-                loss_mean, fixed_loss_mean, random_loss_mean, error_mean, best_mean = unli_eval.eval(test_data, trainparams['batch_size'])
+                loss_mean, fixed_loss_mean, random_loss_mean, error_mean, best_mean, spearman, best_spearman = \
+                    unli_eval.eval(test_data, trainparams['batch_size'])
                 loss_all.append(loss_mean)
                 fixed_loss_all.append(fixed_loss_mean)
                 random_loss_all.append(random_loss_mean)
                 error_all.append(error_mean)
                 best_all.append(best_mean)
+                spearman_all.append(spearman)
+                best_spearman_all.append(best_spearman)
                 LOG.info(f'Test results for fold {i}, subtask a')
-                LOG.info(f'Mean loss:           {loss_mean}')
                 LOG.info(f'Mean fixed loss:     {fixed_loss_mean}')
-                LOG.info(f'Mean random loss:    {random_loss_mean}')
                 LOG.info(f'Mean error:       {error_mean}')
                 LOG.info(f'Prop. best possible: {best_mean}')
+                LOG.info(f'Mean spearman:       {spearman}')
+                LOG.info(f'Best spearman:       {best_spearman}')
+                LOG.info(f'Prop. best spearman: {spearman / best_spearman}')
 
                 LOG.info('Evaluating subtask b')
-                loss_mean, fixed_loss_mean, random_loss_mean, error_mean, best_mean = unli_eval_b.eval(test_data, trainparams['batch_size'])
+                loss_mean, fixed_loss_mean, random_loss_mean, error_mean, best_mean, spearman, best_spearman = \
+                    unli_eval_b.eval(test_data, trainparams['batch_size'])
                 loss_all_b.append(loss_mean)
                 fixed_loss_all_b.append(fixed_loss_mean)
                 random_loss_all_b.append(random_loss_mean)
                 error_all_b.append(error_mean)
                 best_all_b.append(best_mean)
+                spearman_all_b.append(spearman)
+                best_spearman_all_b.append(best_spearman)
                 LOG.info(f'Test results for fold {i}, subtask b')
-                LOG.info(f'Mean loss:           {loss_mean}')
                 LOG.info(f'Mean fixed loss:     {fixed_loss_mean}')
-                LOG.info(f'Mean random loss:    {random_loss_mean}')
                 LOG.info(f'Mean error:       {error_mean}')
                 LOG.info(f'Prop. best possible: {best_mean}')
+                LOG.info(f'Mean spearman:       {spearman}')
+                LOG.info(f'Best spearman:       {best_spearman}')
 
             LOG.info('Finished k-fold cross evaluation.')
             LOG.info('Subtask a results:')

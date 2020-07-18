@@ -210,8 +210,10 @@ def beta_mode(alpha, beta):
             # Can be either 0 or 1. We pick 0.
             modes.append(0)
         elif a <= 1 and b > 1:
+            # Always 0
             modes.append(0)
         elif a > 1 and b <= 1:
+            # Always 1
             modes.append(1)
         else:
             raise ValueError('Unable to compute beta mode!')
