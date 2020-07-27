@@ -113,7 +113,7 @@ class NaturalLanguageInferenceEval:
               metric_trace.append(error)
               best_trace.append(1 - (error-best)/best)
 
-            spearman = spearman_df.corr().iloc[0,1]
+            spearman = spearman_df.corr(method='spearman').iloc[0,1]
             spearman_trace.append(spearman)
 
           # Calculate and return mean of metrics across all batches
