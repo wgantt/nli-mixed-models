@@ -115,9 +115,9 @@ class NaturalLanguageInferenceEval:
               spearman_df['true'] = pd.Series(target.cpu().detach().numpy())
               spearman_df['predicted'] = pd.Series(prediction.cpu().detach().numpy())
               spearman_df['best'] = pd.Series(modal_response.cpu().detach().numpy())
-              spearman = spearman_df[['true', 'predicted']].corr().iloc[0,1]
+              spearman = spearman_df[['true', 'predicted']].corr(method='spearman').iloc[0,1]
               spearman_trace.append(spearman)
-              spearman_best = spearman_df[['true', 'best']].corr().iloc[0,1]
+              spearman_best = spearman_df[['true', 'best']].corr(method='spearman').iloc[0,1]
               spearman_best_trace.append(spearman_best)
 
           # Calculate and return mean of metrics across all batches
