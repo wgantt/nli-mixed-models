@@ -10,8 +10,13 @@ URL_PREFIX = 'http://megaattitude.io/projects/'
 VERIDICALITY_URL = URL_PREFIX + 'mega-veridicality/mega-veridicality-v2/mega-veridicality-v2.csv'
 NEG_RAISING_URL = URL_PREFIX + 'mega-negraising/mega-negraising-v1/mega-negraising-v1.tsv'
 ACCEPTABILITY_URL = URL_PREFIX + 'mega-acceptability/mega-acceptability-v2/mega-acceptability-v2.tsv'
+RANDOM_SEED = 42
 
 LOG = setup_logging()
+
+# set random seed for reproducibility
+torch.manual_seed(RANDOM_SEED)
+np.random.seed(RANDOM_SEED) 
 
 """
 TODO: Add functions for saving models
@@ -266,7 +271,7 @@ def generate_random_splits(df, k_folds=5):
 	df['fold'] = df.apply(lambda row: row.name % k_folds, axis=1)
 
 	# Randomly shuffle the fold assignments
-	df['fold'] = df['fold'].sample(frac=1, replace=False)
+	df['fold'] = df['fold'].sample(frac=1, replace=False, random_state=RANDOM_SEED)
 
 	# Verify
 	_assert_each_value_in_each_fold(df, 'participant')

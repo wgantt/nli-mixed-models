@@ -25,8 +25,13 @@ CAT_OUTPUT_DIM = 3
 UNIT_OUTPUT_DIM = 1
 NUM_FOLDS = 5
 BATCH_SIZE = 128
+RANDOM_SEED = 42
 
 LOG = setup_logging()
+
+# set random seed for reproducibility
+torch.manual_seed(RANDOM_SEED)
+np.manual_seed(RANDOM_SEED)
 
 def load_old_style_model(ckpt_path, device):
 	"""Loads a model that was saved in a now-obsolete format
