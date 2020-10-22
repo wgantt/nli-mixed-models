@@ -1,6 +1,6 @@
 {
   "checkpoints":{
-    "ckpt_dir":"scripts/unit/checkpoints/",
+    "ckpt_dir":"/data/wgantt/nli-mixed-effects/new/unit/random_slopes/annotator/",
     "ckpt_file_name":"unit",
     "save_ckpts":true
   },
@@ -11,7 +11,7 @@
     "setting":["extended"],
     "use_sampling":[false],
     "n_samples":[100],
-    "device":["cpu"]
+    "device":["cuda:1"]
   },
   "training":{
     "n_epochs":[25],
@@ -20,8 +20,8 @@
     "batch_size":[128]
   },
   "settings":{
-    "use_random_slopes":false,
-    "split_type":"random",
+    "use_random_slopes":true,
+    "split_type":"annotator",
     "k_folds":5
   }
 }

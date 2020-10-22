@@ -1,6 +1,6 @@
 {
   "checkpoints":{
-    "ckpt_dir":"scripts/categorical/checkpoints/",
+    "ckpt_dir":"/data/wgantt/nli-mixed-effects/new/categorical/standard/annotator",
     "ckpt_file_name":"categorical",
     "save_ckpts":true
   },
@@ -8,10 +8,10 @@
     "embedding_dim":[768],
     "n_predictor_layers":[1],
     "hidden_dim":[128],
-    "setting":["extended"],
+    "setting":["standard"],
     "use_sampling":[false],
     "n_samples":[100],
-    "device":["cpu"]
+    "device":["cuda:1"]
   },
   "training":{
     "n_epochs":[25],
@@ -21,7 +21,7 @@
   },
   "settings":{
     "use_random_slopes":false,
-    "split_type":"random",
+    "split_type":"annotator",
     "k_folds":5
   }
 }
