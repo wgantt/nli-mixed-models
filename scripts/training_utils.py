@@ -21,6 +21,8 @@ URL_PREFIX = "http://megaattitude.io/projects/"
 
 VERIDICALITY_DATA = "data/mega-veridicality-v2.csv"
 NEG_RAISING_DATA = "data/mega-negraising-v1.tsv"
+DIFFICULTY_DATA = "data/mega-intensionality-nonfinite-difficulty.tsv"
+INTENSIONALITY_DATA = "data/mega-intensionality-v1.tsv"
 
 ACCEPTABILITY_URL = (
     URL_PREFIX + "mega-acceptability/mega-acceptability-v2/mega-acceptability-v2.tsv"
@@ -245,6 +247,65 @@ def load_neg_raising():
     return neg
 
 
+def load_difficulty(templatized=True):
+    def fill_templates(subject, tense, verb, frame, verbform, hypothesis):
+        # TBC
+        pass
+
+    # Read the TSV
+    diff = pd.read_csv(DIFFICULTY_DATA, sep="\t")
+
+    diff = diff.rename(columns={'target':'consequent_target','antecedent_text':'sentence','consequent_text':'hypothesis'})
+
+    # Map participant numbers to contiguous integers
+    diff["participant"] = diff.participant.astype("category").cat.codes
+
+    # The target values are just the difficulty scores
+    diff["target"] = diff.response_difficulty
+
+    # We will be use a binary cross entrop loss in the models, and the best
+    # possible response for this loss is the mean
+    diff["modal_response"] = diff.groupby(
+        ["antecedent_verb", "antecedent_polarity", "consequent_target", "control", "antecedent_frame",
+         "consequent_verb", "consequent_embedded_tense"]
+    ).response_difficulty.transform(np.median)
+
+    return diff
+
+
+def load_intensionality(templatized=True):
+    def fill_templates(subject, tense, verb, frame, verbform, hypothesis):
+        # TBC
+        pass
+
+    # Read both the nonfinite difficulty TSV and the finite MI TSV
+    diff = pd.read_csv(DIFFICULTY_DATA, sep="\t")
+    mi = pd.read_csv(INTENSIONALITY_DATA, sep="\t")
+
+    # Concatenate the two
+    diff = diff.drop(columns=['response_difficulty'])
+    diff = diff.rename(columns={'response_likelihood':'response'})
+    mi = pd.concat([mi, diff])
+    mi["control"] = mi["control"].fillna('na')
+
+    mi = mi.rename(columns={'target':'consequent_target','antecedent_text':'sentence','consequent_text':'hypothesis'})
+
+    # Map participant numbers to contiguous integers
+    mi["participant"] = mi.participant.astype("category").cat.codes
+
+    # The target values are just the difficulty scores
+    mi["target"] = mi.response
+
+    # We will be use a binary cross entrop loss in the models, and the best
+    # possible response for this loss is the mean
+    mi["modal_response"] = mi.groupby(
+        ["antecedent_verb", "antecedent_polarity", "consequent_target", "control", "antecedent_frame",
+         "consequent_verb", "consequent_embedded_tense"]
+    ).response.transform(np.median)
+
+    return mi
+
+
 def load_acceptability():
     def get_idx(sentence, tense, template, verblemma):
         """
@@ -454,3 +515,16 @@ def _assert_unique_to_fold(df, groupby):
     assert (
         df.groupby(groupby)["fold"].nunique().max() == 1
     ), f'distinct "{groupby}" values span multiple folds'
+
+
+if __name__ == "__main__":
+    test = load_difficulty()
+    print(len(test))
+    print(test.columns)
+    print(test.head())
+    print(test.tail())
+
+    # print(pd.value_counts(test['participant']))
+
+    # test2 = generate_random_splits(test)
+    # print(test2)

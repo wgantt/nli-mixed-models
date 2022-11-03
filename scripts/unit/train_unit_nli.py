@@ -10,6 +10,8 @@ from scripts.setup_logging import setup_logging
 from scripts.training_utils import (
     parameter_grid,
     load_neg_raising,
+    load_difficulty,
+    load_intensionality,
     generate_splits,
     save_model_with_args,
 )
@@ -32,10 +34,17 @@ def main(args):
     for hyperparams in parameter_grid(params["hyper"]):
         for trainparams in parameter_grid(params["training"]):
 
-            # Load MegaVeridicality data
-            LOG.info("Loading MegaNegRaising data...")
-            neg = load_neg_raising()
-            hyperparams["n_participants"] = neg.participant.unique().shape[0]
+            # Load data
+            if "dataset" in settings and settings["dataset"] == "difficulty":
+                LOG.info("Loading Difficulty data...")
+                data = load_difficulty()
+            elif "dataset" in settings and settings["dataset"] == "intensionality":
+                LOG.info("Loading Intensionality data...")
+                data = load_intensionality()
+            else:
+                LOG.info("Loading MegaNegRaising data...")
+                data = load_neg_raising()
+            hyperparams["n_participants"] = data.participant.unique().shape[0]
             LOG.info("...Complete.")
 
             # Log the device being used
@@ -46,7 +55,7 @@ def main(args):
             k_folds = settings["k_folds"]
             split_type = settings["split_type"]
             setting = hyperparams["setting"]
-            neg = generate_splits(neg, split_type, k_folds=k_folds, datatype="n")
+            data = generate_splits(data, split_type, k_folds=k_folds, datatype="n")
             LOG.info(
                 f"Beginning training with {k_folds}-fold cross-validation in the {setting} setting, partitioning based on {split_type}."
             )
@@ -59,7 +68,7 @@ def main(args):
                 + "-".join([checkpoint_file_name, "partition", split_type, "data"])
                 + ".csv"
             )
-            neg.to_csv(data_file_name, index=False)
+            data.to_csv(data_file_name, index=False)
 
             # Perform k-fold cross-validation
             # Note: we really don't need to be keeping track of the
@@ -107,8 +116,8 @@ def main(args):
                 train_folds = [j for j in range(k_folds) if j != test_fold]
                 LOG.info(f"Beginning training with test fold={test_fold}.")
 
-                train_data = neg[neg.fold.isin(train_folds)]
-                test_data = neg[neg.fold == test_fold]
+                train_data = data[data.fold.isin(train_folds)]
+                test_data = data[data.fold == test_fold]
 
                 # Fit the model on the train folds
                 unit_model = unli_trainer.fit(train_data=train_data, **trainparams)
