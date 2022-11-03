@@ -139,52 +139,60 @@ class NaturalLanguageInferenceEval:
                     metric_trace.append(error)
                     best_trace.append(1 - (error - best) / best)
 
-            # Calculate Spearman's correlation coefficient between
-            # 1. Best possible (i.e. modal) responses and true responses
-            # 2. Predicted responses and true responses
-            """
-            spearman_df = pd.DataFrame()
-            spearman_df["true"] = pd.Series(all_targets.cpu().detach().numpy())
-            spearman_df["predicted"] = pd.Series(
-                all_predictions.cpu().detach().numpy()
-            )
-            spearman_df["best"] = pd.Series(
-                all_modal_responses.cpu().detach().numpy()
-            )
-            spearman_predicted = (
-                spearman_df[["true", "predicted"]]
-                .corr(method="spearman")
-                .iloc[0, 1]
-            )
-            spearman_best = (
-                spearman_df[["true", "best"]].corr(method="spearman").iloc[0, 1]
-            )
-            """
+            if isinstance(self.nli, CategoricalRandomIntercepts) or isinstance(
+                self.nli, CategoricalRandomSlopes
+            ):
+                # we don't compute these for the categorical models
+                spearman_predicted = 0
+                spearman_best = 1
 
-            # Calculate and return mean of metrics across all batches
+                # the majority class baseline accuracy
+                worst_mean = naive_acc
+            else:
+                # we don't need worst_mean for the unit models
+                worst_mean = 0
+
+                # Calculate Spearman's correlation coefficient between
+                # 1. Best possible (i.e. modal) responses and true responses
+                # 2. Predicted responses and true responses
+                spearman_df = pd.DataFrame()
+                spearman_df["true"] = pd.Series(all_targets.cpu().detach().numpy())
+                spearman_df["predicted"] = pd.Series(
+                    all_predictions.cpu().detach().numpy()
+                )
+                spearman_df["best"] = pd.Series(
+                    all_modal_responses.cpu().detach().numpy()
+                )
+                spearman_predicted = (
+                    spearman_df[["true", "predicted"]]
+                    .corr(method="spearman")
+                    .iloc[0, 1]
+                )
+                spearman_best = (
+                    spearman_df[["true", "best"]].corr(method="spearman").iloc[0, 1]
+                )
+                # Spearman's rank correlation between all predictions and the gold
+                spearman_predicted = np.round(spearman_predicted, 4)
+
+                # An undefined Spearman means that all the predicted values are
+                # the same. This is unlikely to occur across an entire test fold,
+                # but not impossible. As noted in the paper, an undefined Spearman
+                # correlation essentially represents *0* correlation.
+                if np.isnan(spearman_predicted):
+                    spearman_predicted = 0.0
+
+                # Spearman's rank correlations between
+                # all best possible predictions and the gold
+                spearman_best = np.round(spearman_best, 4)
+
+
+            # The mean loss (total, fixed effects loss, and random effects loss)
+            # and metrics
+            metric_mean = np.round(np.mean(metric_trace), 4)
+            best_mean = np.round(np.mean(best_trace), 4)
             loss_mean = np.round(np.mean(loss_trace), 4)
             fixed_loss_mean = np.round(np.mean(fixed_loss_trace), 4)
             random_loss_mean = np.round(np.mean(random_loss_trace), 4)
-            metric_mean = np.round(np.mean(metric_trace), 4)
-            best_mean = np.round(np.mean(best_trace), 4)
-            """
-            spearman_predicted = np.round(spearman_predicted, 4)
-            spearman_best = np.round(spearman_best, 4)
-            """
-            spearman_predicted = 0
-            spearman_best = 1
-
-            # Macroaverage
-            best_mean = (all_modal_responses == all_targets).cpu().numpy().mean()
-            worst_mean = naive_acc
-            metric_mean = accuracy(all_predictions, all_targets)
-
-            # An undefined Spearman means that all the predicted values are
-            # the same. This is unlikely to occur across an entire test fold,
-            # but not impossible. As noted in the paper, an undefined Spearman
-            # correlation essentially represents *0* correlation.
-            if np.isnan(spearman_predicted):
-                spearman_predicted = 0.0
 
             return (
                 loss_mean,

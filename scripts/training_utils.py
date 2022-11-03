@@ -7,12 +7,21 @@ from itertools import product
 from pandas.api.types import CategoricalDtype
 
 URL_PREFIX = "http://megaattitude.io/projects/"
-VERIDICALITY_URL = (
-    URL_PREFIX + "mega-veridicality/mega-veridicality-v2/mega-veridicality-v2.csv"
-)
-NEG_RAISING_URL = (
-    URL_PREFIX + "mega-negraising/mega-negraising-v1/mega-negraising-v1.tsv"
-)
+
+
+# The versions of the neg-raising and veridicality data at these URLS
+# have changed since we obtained our initial results. We therefore use
+# the local copies in this repo instead, which are fixed. 
+# VERIDICALITY_URL = (
+#     URL_PREFIX + "mega-veridicality/mega-veridicality-v2/mega-veridicality-v2.csv"
+# )
+# NEG_RAISING_URL = (
+#     URL_PREFIX + "mega-negraising/mega-negraising-v1/mega-negraising-v1.tsv"
+# )
+
+VERIDICALITY_DATA = "data/mega-veridicality-v2.csv"
+NEG_RAISING_DATA = "data/mega-negraising-v1.tsv"
+
 ACCEPTABILITY_URL = (
     URL_PREFIX + "mega-acceptability/mega-acceptability-v2/mega-acceptability-v2.tsv"
 )
@@ -110,7 +119,7 @@ def load_veridicality():
         return values[counts.argmax()]
 
     # Read the CSV
-    df = pd.read_csv(VERIDICALITY_URL)
+    df = pd.read_csv(VERIDICALITY_DATA)
 
     # Remove non-native English speakers
     df = df[df.nativeenglish]
@@ -186,7 +195,7 @@ def load_neg_raising():
             return hypothesis.replace("Someone", "That person")
 
     # Read the TSV
-    neg = pd.read_csv(NEG_RAISING_URL, sep="\t")
+    neg = pd.read_csv(NEG_RAISING_DATA, sep="\t")
 
     # Load MegaAcceptability, which contains necessary information for
     # hypothesis generation
@@ -220,9 +229,6 @@ def load_neg_raising():
     neg["hypothesis"] = neg[
         ["subject", "tense", "verb", "frame", "verbform", "hypothesis"]
     ].apply(lambda x: convert_subject(*x), axis=1)
-
-    # Keep only first-person, present subjects
-    neg[(neg.subject == "first") & (neg.tense == "present")]
 
     # Map participant numbers to contiguous integers
     neg["participant"] = neg.participant.astype("category").cat.codes

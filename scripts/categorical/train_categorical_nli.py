@@ -141,6 +141,7 @@ def main(args):
                     best_mean,
                     spearman_mean,
                     best_spearman_mean,
+                    _
                 ) = cnli_eval.eval(test_data, trainparams["batch_size"])
                 loss_all.append(loss_mean)
                 fixed_loss_all.append(fixed_loss_mean)
@@ -165,6 +166,7 @@ def main(args):
                     best_mean,
                     spearman_mean,
                     best_spearman_mean,
+                    _
                 ) = cnli_eval.eval(test_data, trainparams["batch_size"])
                 loss_all_b.append(loss_mean)
                 fixed_loss_all_b.append(fixed_loss_mean)

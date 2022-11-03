@@ -147,6 +147,7 @@ def main(args):
                     best_mean,
                     spearman,
                     best_spearman,
+                    _
                 ) = unli_eval.eval(test_data, trainparams["batch_size"])
                 loss_all.append(loss_mean)
                 fixed_loss_all.append(fixed_loss_mean)
@@ -172,6 +173,7 @@ def main(args):
                     best_mean,
                     spearman,
                     best_spearman,
+                    _
                 ) = unli_eval_b.eval(test_data, trainparams["batch_size"])
                 loss_all_b.append(loss_mean)
                 fixed_loss_all_b.append(fixed_loss_mean)
@@ -182,24 +184,29 @@ def main(args):
                 best_spearman_all_b.append(best_spearman)
                 LOG.info(f"Test results for fold {i}, subtask b")
                 LOG.info(f"Mean fixed loss:     {fixed_loss_mean}")
-                LOG.info(f"Mean error:       {error_mean}")
+                LOG.info(f"Mean error:          {error_mean}")
                 LOG.info(f"Prop. best possible: {best_mean}")
                 LOG.info(f"Mean spearman:       {spearman}")
                 LOG.info(f"Best spearman:       {best_spearman}")
+                LOG.info(f"Prop. best spearman: {spearman / best_spearman}")
 
             LOG.info("Finished k-fold cross evaluation.")
-            LOG.info("Subtask a results:")
-            LOG.info(f"Mean loss:           {np.round(np.mean(loss_all), 4)}")
-            LOG.info(f"Mean fixed loss:     {np.round(np.mean(fixed_loss_all), 4)}")
-            LOG.info(f"Mean random loss:    {np.round(np.mean(random_loss_all), 4)}")
-            LOG.info(f"Mean error:       {np.round(np.mean(error_all), 4)}")
-            LOG.info(f"Prop. best possible: {np.round(np.mean(best_all), 4)}")
-            LOG.info("Subtask b results:")
-            LOG.info(f"Mean loss:           {np.round(np.mean(loss_all_b), 4)}")
-            LOG.info(f"Mean fixed loss:     {np.round(np.mean(fixed_loss_all_b), 4)}")
-            LOG.info(f"Mean random loss:    {np.round(np.mean(random_loss_all_b), 4)}")
-            LOG.info(f"Mean error:       {np.round(np.mean(error_all_b), 4)}")
-            LOG.info(f"Prop. best possible: {np.round(np.mean(best_all_b), 4)}")
+            LOG.info("Subtask (a) results (avg. across folds):")
+            LOG.info(f"Mean loss:                    {np.round(np.mean(loss_all), 4)}")
+            LOG.info(f"Mean fixed loss:              {np.round(np.mean(fixed_loss_all), 4)}")
+            LOG.info(f"Mean random loss:             {np.round(np.mean(random_loss_all), 4)}")
+            LOG.info(f"Mean error:                   {np.round(np.mean(error_all), 4)}")
+            LOG.info(f"Mean spearman:                {np.round(np.mean(spearman_all), 4)}")
+            LOG.info(f"Best spearman:                {np.round(np.mean(best_spearman_all), 4)}")
+            LOG.info(f"Prop. best possible spearman: {np.round(np.mean(best_all), 4)}\n")
+            LOG.info("Subtask (b) results (avg. across folds):")
+            LOG.info(f"Mean loss:                    {np.round(np.mean(loss_all_b), 4)}")
+            LOG.info(f"Mean fixed loss:              {np.round(np.mean(fixed_loss_all_b), 4)}")
+            LOG.info(f"Mean random loss:             {np.round(np.mean(random_loss_all_b), 4)}")
+            LOG.info(f"Mean error:                   {np.round(np.mean(error_all_b), 4)}")
+            LOG.info(f"Mean spearman:                {np.round(np.mean(spearman_all_b), 4)}")
+            LOG.info(f"Best spearman:                {np.round(np.mean(best_spearman_all_b), 4)}")
+            LOG.info(f"Prop. best possible spearman: {np.round(np.mean(best_all_b), 4)}")
 
 
 if __name__ == "__main__":

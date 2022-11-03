@@ -159,7 +159,6 @@ class NaturalLanguageInferenceTrainer:
                     error = absolute_error(prediction, target)
                     best = absolute_error(modal_response, target)
                     metric_trace.append(error)
-                    # best_trace.append(best)
                     best_trace.append(1 - (error - best) / best)
 
                 if not (batch % verbosity):
@@ -182,7 +181,7 @@ class NaturalLanguageInferenceTrainer:
                             f"mean error:          {np.round(np.mean(metric_trace), 4)}"
                         )
 
-                    LOG.info(f"prop. best possible: {np.round(np.mean(best_trace), 4)}")
+                    LOG.info(f"Prop. best possible: {np.round(np.mean(best_trace), 4)}")
                     LOG.info("")
 
                     LOG.info("")
