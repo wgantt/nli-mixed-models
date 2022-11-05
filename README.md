@@ -22,7 +22,7 @@ If you add any dependencies as you're working, please be sure to add them to `re
 
 ```python -m scripts.{categorical,unit}.{script_name} --parameters [path/to/parameters/file]```
 
-If no file path is given as an argument to `--parameters`, the script uses the default JSON file in the appropriate directory (either `scripts/categorical` or `scripts/unit`). In any case, these can be consulted as templates for any custom parameters files you create.
+If no file path is given as an argument to `--parameters`, the script uses the default JSON file in the appropriate directory &mdash; either `scripts/categorical` or `scripts/unit`. The config files provided in those directories are merely examples (from actual experiments reported in the paper) and can be consulted as templates for any additional parameters files you may wish to create.
 
 The structure of this package is largely modeled off that of [torch-combinatorial](https://github.com/aaronstevenwhite/torch-combinatorial). Guidance for how to structure any additions to this package should thus be sought there. The core components of the code were drawn from the "Natural Language Inference with Mixed Effects Models" notebook, which can be found [here](https://github.com/aaronstevenwhite/nli-mixed-models/blob/master/scripts/Natural%20Language%20Inference%20with%20Mixed%20Effects%20Models.ipynb).
 

@@ -1,5 +1,6 @@
 import argparse, json, torch
 import numpy as np
+import os
 
 from nli_mixed_models.trainers.nli_trainer import (
     CategoricalRandomInterceptsTrainer,
@@ -28,6 +29,8 @@ def main(args):
     save_checkpoints = checkpoints["save_ckpts"]
     checkpoint_dir = checkpoints["ckpt_dir"]
     checkpoint_file_name = checkpoints["ckpt_file_name"]
+
+    os.makedirs(checkpoint_dir)
 
     for hyperparams in parameter_grid(params["hyper"]):
         for trainparams in parameter_grid(params["training"]):

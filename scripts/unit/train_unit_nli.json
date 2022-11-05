@@ -20,7 +20,7 @@
     "batch_size":[128]
   },
   "settings":{
-    "use_random_slopes":true,
+    "use_random_slopes":false,
     "split_type":"annotator",
     "k_folds":5
   }
