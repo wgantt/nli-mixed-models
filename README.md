@@ -2,10 +2,12 @@
 
 This project implements reusable annotator random effects components for natural language inference models as presented in the following paper:
 
+```
 Natural Language Inference with Mixed Effects
 William Gantt, Benjamin Kane, and Aaron Steven White
 *SEM 2020
 https://aclanthology.org/2020.starsem-1.9v2.pdf
+```
 
 ## Development
 
