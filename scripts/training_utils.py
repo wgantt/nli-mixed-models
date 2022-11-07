@@ -23,6 +23,7 @@ VERIDICALITY_DATA = "data/mega-veridicality-v2.csv"
 NEG_RAISING_DATA = "data/mega-negraising-v1.tsv"
 DIFFICULTY_DATA = "data/mega-intensionality-nonfinite-difficulty.tsv"
 INTENSIONALITY_DATA = "data/mega-intensionality-v1.tsv"
+NAME_DATA = "data/names.txt"
 
 ACCEPTABILITY_URL = (
     URL_PREFIX + "mega-acceptability/mega-acceptability-v2/mega-acceptability-v2.tsv"
@@ -248,9 +249,16 @@ def load_neg_raising():
 
 
 def load_difficulty(templatized=True):
-    def fill_templates(subject, tense, verb, frame, verbform, hypothesis):
-        # TBC
-        pass
+    names = load_names()
+    def fill_templates(sentence, hypothesis):
+        replacements = np.random.choice(names, 2)
+        sentence = sentence.replace('A', replacements[0])
+        hypothesis = hypothesis.replace('A', replacements[0])
+        sentence = sentence.replace('B', replacements[1])
+        hypothesis = hypothesis.replace('B', replacements[1])
+        sentence = sentence.replace('C', 'something')
+        hypothesis = hypothesis.replace('C', 'that thing')
+        return sentence, hypothesis
 
     # Read the TSV
     diff = pd.read_csv(DIFFICULTY_DATA, sep="\t")
@@ -263,6 +271,10 @@ def load_difficulty(templatized=True):
     # The target values are just the difficulty scores
     diff["target"] = diff.response_difficulty
 
+    # Fill templates
+    if not templatized:
+        diff[["sentence","hypothesis"]] = diff[["sentence", "hypothesis"]].apply(lambda x: fill_templates(*x), axis=1, result_type='expand')
+
     # We will be use a binary cross entrop loss in the models, and the best
     # possible response for this loss is the mean
     diff["modal_response"] = diff.groupby(
@@ -274,9 +286,16 @@ def load_difficulty(templatized=True):
 
 
 def load_intensionality(templatized=True):
-    def fill_templates(subject, tense, verb, frame, verbform, hypothesis):
-        # TBC
-        pass
+    names = load_names()
+    def fill_templates(sentence, hypothesis):
+        replacements = np.random.choice(names, 2)
+        sentence = sentence.replace('A', replacements[0])
+        hypothesis = hypothesis.replace('A', replacements[0])
+        sentence = sentence.replace('B', replacements[1])
+        hypothesis = hypothesis.replace('B', replacements[1])
+        sentence = sentence.replace('C', 'something')
+        hypothesis = hypothesis.replace('C', 'that thing')
+        return sentence, hypothesis
 
     # Read both the nonfinite difficulty TSV and the finite MI TSV
     diff = pd.read_csv(DIFFICULTY_DATA, sep="\t")
@@ -295,6 +314,10 @@ def load_intensionality(templatized=True):
 
     # The target values are just the difficulty scores
     mi["target"] = mi.response
+
+    # Fill templates
+    if not templatized:
+        mi[["sentence","hypothesis"]] = mi[["sentence", "hypothesis"]].apply(lambda x: fill_templates(*x), axis=1, result_type='expand')
 
     # We will be use a binary cross entrop loss in the models, and the best
     # possible response for this loss is the mean
@@ -355,6 +378,15 @@ def load_acceptability():
     )
 
     return acc
+
+
+def load_names(n=100):
+    """Loads a list of the n most common first names (for use in filling
+       templatized sentences)"""
+    with open(NAME_DATA) as f:
+        lines = [line.rstrip() for line in f]
+    names = lines[0:n] if n < len(lines) else lines
+    return names
 
 
 def generate_random_splits(df, k_folds=5):
@@ -518,11 +550,12 @@ def _assert_unique_to_fold(df, groupby):
 
 
 if __name__ == "__main__":
-    test = load_difficulty()
+    test = load_difficulty(templatized=False)
     print(len(test))
     print(test.columns)
     print(test.head())
     print(test.tail())
+    print(test[['sentence','hypothesis']].head())
 
     # print(pd.value_counts(test['participant']))
 

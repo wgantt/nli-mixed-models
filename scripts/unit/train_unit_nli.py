@@ -39,11 +39,13 @@ def main(args):
 
             # Load data
             if "dataset" in settings and settings["dataset"] == "difficulty":
-                LOG.info("Loading Difficulty data...")
-                data = load_difficulty()
+                templatic = "templatic" in settings and settings["templatic"]
+                LOG.info(f"Loading Difficulty data... (templatic: {templatic})")
+                data = load_difficulty(templatized=templatic)
             elif "dataset" in settings and settings["dataset"] == "intensionality":
-                LOG.info("Loading Intensionality data...")
-                data = load_intensionality()
+                templatic = "templatic" in settings and settings["templatic"]
+                LOG.info(f"Loading Intensionality data... (templatic: {templatic})")
+                data = load_intensionality(templatized=templatic)
             else:
                 LOG.info("Loading MegaNegRaising data...")
                 data = load_neg_raising()
