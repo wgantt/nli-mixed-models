@@ -6,6 +6,7 @@ from nli_mixed_models.trainers.nli_trainer import (
     UnitRandomInterceptsTrainer,
     UnitRandomSlopesTrainer,
 )
+from nli_mixed_models.eval.nli_eval import UnitEval
 from scripts.setup_logging import setup_logging
 from scripts.training_utils import (
     parameter_grid,
@@ -99,7 +100,49 @@ def main(args):
                 )
                 LOG.info("Model saved.")
 
-            LOG.info("Finished training full model.")
+            # Evaluate the model
+            unli_eval = UnitEval(unit_model, "a", device=device)
+            unli_eval_b = UnitEval(unit_model, "b", device=device)
+
+            LOG.info("Evaluating subtask a")
+            (
+                loss_mean,
+                fixed_loss_mean,
+                random_loss_mean,
+                error_mean,
+                best_mean,
+                spearman,
+                best_spearman,
+                _
+            ) = unli_eval.eval(train_data, trainparams["batch_size"])
+
+            LOG.info(f"Test results for subtask a")
+            LOG.info(f"Mean fixed loss:     {fixed_loss_mean}")
+            LOG.info(f"Mean error:       {error_mean}")
+            LOG.info(f"Prop. best possible: {best_mean}")
+            LOG.info(f"Mean spearman:       {spearman}")
+            LOG.info(f"Best spearman:       {best_spearman}")
+            LOG.info(f"Prop. best spearman: {spearman / best_spearman}")
+
+            LOG.info("Evaluating subtask b")
+            (
+                loss_mean,
+                fixed_loss_mean,
+                random_loss_mean,
+                error_mean,
+                best_mean,
+                spearman,
+                best_spearman,
+                _
+            ) = unli_eval_b.eval(train_data, trainparams["batch_size"])
+
+            LOG.info(f"Test results for subtask b")
+            LOG.info(f"Mean fixed loss:     {fixed_loss_mean}")
+            LOG.info(f"Mean error:          {error_mean}")
+            LOG.info(f"Prop. best possible: {best_mean}")
+            LOG.info(f"Mean spearman:       {spearman}")
+            LOG.info(f"Best spearman:       {best_spearman}")
+            LOG.info(f"Prop. best spearman: {spearman / best_spearman}")
 
 
 if __name__ == "__main__":
