@@ -60,7 +60,10 @@ def main(args):
     ckpt_path = args.model_ckpt_path
     model_type = "categorical" if "categorical" in ckpt_path else "unit"
     data_file_name = args.dataset_filename
-    data = pd.read_csv(data_file_name)
+    if '.tsv' in data_file_name:
+      data = pd.read_csv(data_file_name, sep='\t')
+    else:
+      data = pd.read_csv(data_file_name)
 
     ckpt_file_name = ckpt_path + "/" + model_type + ".pt"
     model, hyperparams = load_model(ckpt_file_name, args.device)
@@ -79,8 +82,12 @@ def main(args):
     pred = nli_pred.predict(data, BATCH_SIZE)
 
     data['target_pred'] = pred
-    new_file_name = data_file_name.split('.csv')[0] + '_pred.csv'
-    data.to_csv(new_file_name, index=False)
+    if '.tsv' in data_file_name:
+      new_file_name = data_file_name.split('.tsv')[0] + '_pred.tsv'
+      data.to_csv(new_file_name, sep='\t', index=False)
+    else:
+      new_file_name = data_file_name.split('.csv')[0] + '_pred.csv'
+      data.to_csv(new_file_name, index=False)
 
     
 
