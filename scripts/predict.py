@@ -5,7 +5,7 @@ import json
 import numpy as np
 import pandas as pd
 
-from scripts.training_utils import load_model_with_args
+from scripts.training_utils import load_model_with_missing_hyperparams
 from scripts.setup_logging import setup_logging
 
 from nli_mixed_models.modules.nli_random_intercepts import (
@@ -19,6 +19,8 @@ from nli_mixed_models.modules.nli_random_slopes import (
 from nli_mixed_models.predict.nli_predict import UnitPredict, CategoricalPredict
 from glob import glob
 
+CAT_OUTPUT_DIM = 3
+UNIT_OUTPUT_DIM = 1
 
 NUM_FOLDS = 5
 BATCH_SIZE = 128
@@ -37,11 +39,13 @@ def load_model(ckpt_path, device):
 
     # Determine the type of model
     if "categorical" in ckpt_path:
+        output_dim = CAT_OUTPUT_DIM
         if "random_intercepts" in ckpt_path or "standard" in ckpt_path:
             model_cls = CategoricalRandomIntercepts
         else:
             model_cls = CategoricalRandomSlopes
     elif "unit" in ckpt_path:
+        output_dim = UNIT_OUTPUT_DIM
         if "random_intercepts" in ckpt_path or "standard" in ckpt_path:
             model_cls = UnitRandomIntercepts
         else:
@@ -49,8 +53,10 @@ def load_model(ckpt_path, device):
     else:
         raise ValueError(f"Unknown model type!")
 
+    missing_hyperparams = {"output_dim": output_dim}
+
     # Load the model
-    model, hyper_params = load_model_with_args(model_cls, ckpt_path)
+    model, hyper_params = load_model_with_missing_hyperparams(model_cls, ckpt_path, missing_hyperparams)
     model = model.to(torch.device(device))
 
     return model, hyper_params
