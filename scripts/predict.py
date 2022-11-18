@@ -88,12 +88,21 @@ def main(args):
     pred = nli_pred.predict(data, BATCH_SIZE)
 
     data['target_pred'] = pred
-    if '.tsv' in data_file_name:
-      new_file_name = data_file_name.split('.tsv')[0] + '_pred.tsv'
-      data.to_csv(new_file_name, sep='\t', index=False)
+
+    output_file_name = args.output_filename
+
+    if output_file_name:
+      if '.tsv' in output_file_name:
+        data.to_csv(output_file_name, sep='\t', index=False)
+      else:
+        data.to_csv(output_file_name, index=False)
     else:
-      new_file_name = data_file_name.split('.csv')[0] + '_pred.csv'
-      data.to_csv(new_file_name, index=False)
+      if '.tsv' in data_file_name:
+        new_file_name = data_file_name.split('.tsv')[0] + '_pred.tsv'
+        data.to_csv(new_file_name, sep='\t', index=False)
+      else:
+        new_file_name = data_file_name.split('.csv')[0] + '_pred.csv'
+        data.to_csv(new_file_name, index=False)
 
     
 
@@ -108,6 +117,9 @@ if __name__ == "__main__":
     parser.add_argument(
       "dataset_filename",
       help="the filename containing the data to generate predictions for"
+    )
+    parser.add_argument(
+      "--output_filename", help="the filename to output the predictions"
     )
     parser.add_argument(
         "--device", default="cpu", help="the device on which to run the script"
