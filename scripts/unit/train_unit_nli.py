@@ -51,6 +51,7 @@ def main(args):
                 LOG.info("Loading MegaNegRaising data...")
                 data = load_neg_raising()
             elif "dataset" in settings:
+                templatic = "templatic" in settings and settings["templatic"]
                 LOG.info("Loading unit data...")
                 data = load_unit_data(settings["dataset"], templatized=templatic)
             else:
