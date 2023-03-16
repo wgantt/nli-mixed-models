@@ -248,6 +248,40 @@ def load_neg_raising():
     return neg
 
 
+def load_unit_data(dataset, templatized=True):
+    names = load_names()
+    def fill_templates(sentence, hypothesis):
+        replacements = np.random.choice(names, 2)
+        sentence = sentence.replace('A', replacements[0])
+        hypothesis = hypothesis.replace('A', replacements[0])
+        sentence = sentence.replace('B', replacements[1])
+        hypothesis = hypothesis.replace('B', replacements[1])
+        sentence = sentence.replace('C', 'something')
+        hypothesis = hypothesis.replace('C', 'that thing')
+        return sentence, hypothesis
+
+    # Read the TSV
+    data = pd.read_csv(dataset, sep="\t")
+
+    data = data.rename(columns={'target':'consequent_target','antecedent_text':'sentence','consequent_text':'hypothesis','response':'target'})
+
+    # Map participant numbers to contiguous integers
+    data["participant"] = data.participant.astype("category").cat.codes
+
+    # Fill templates
+    if not templatized:
+        data[["sentence","hypothesis"]] = data[["sentence", "hypothesis"]].apply(lambda x: fill_templates(*x), axis=1, result_type='expand')
+
+    columns_special = ['participant', 'sentence', 'hypothesis', 'target', 'sanity']
+    columns_groups = [c for c in data.columns if c not in columns_special]
+
+    # We will be use a binary cross entrop loss in the models, and the best
+    # possible response for this loss is the mean
+    data["modal_response"] = data.groupby(columns_groups).target.transform(np.median)
+
+    return data
+
+
 def load_difficulty(templatized=True):
     names = load_names()
     def fill_templates(sentence, hypothesis):

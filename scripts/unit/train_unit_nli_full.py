@@ -10,6 +10,7 @@ from nli_mixed_models.eval.nli_eval import UnitEval
 from scripts.setup_logging import setup_logging
 from scripts.training_utils import (
     parameter_grid,
+    load_unit_data,
     load_neg_raising,
     load_difficulty,
     load_intensionality,
@@ -45,6 +46,12 @@ def main(args):
                 templatic = "templatic" in settings and settings["templatic"]
                 LOG.info(f"Loading Intensionality data... (templatic: {templatic})")
                 data = load_intensionality(templatized=templatic)
+            elif "dataset" in settings and settings["dataset"] == "negraising":
+                LOG.info("Loading MegaNegRaising data...")
+                data = load_neg_raising()
+            elif "dataset" in settings:
+                LOG.info("Loading unit data...")
+                data = load_unit_data(settings["dataset"], templatized=templatic)
             else:
                 LOG.info("Loading MegaNegRaising data...")
                 data = load_neg_raising()
