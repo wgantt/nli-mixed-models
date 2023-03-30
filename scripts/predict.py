@@ -82,12 +82,13 @@ def main(args):
     LOG.info(f"Evaluating subtask {subtask}")
     if model_type == "categorical":
         nli_pred = CategoricalPredict(model, subtask, device=args.device)
+        pred_mean, _ = nli_pred.predict(data, BATCH_SIZE)
+        data['target_pred_mean'] = pred_mean
     else:
         nli_pred = UnitPredict(model, subtask, device=args.device)
-
-    pred = nli_pred.predict(data, BATCH_SIZE)
-
-    data['target_pred'] = pred
+        pred_mean, pred_precision = nli_pred.predict(data, BATCH_SIZE)
+        data['target_pred_mean'] = pred_mean
+        data['target_pred_precision'] = pred_precision
 
     output_file_name = args.output_filename
 

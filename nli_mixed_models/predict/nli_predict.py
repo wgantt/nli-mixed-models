@@ -39,7 +39,8 @@ class NaturalLanguageInferencePredict:
             ]
 
             # Tensor for accumulating predictions
-            all_predictions = torch.FloatTensor().to(self.device)
+            all_pred_mean = torch.FloatTensor().to(self.device)
+            all_pred_precision = torch.FloatTensor().to(self.device)
 
             # Make predictions for each batch in data
             for batch, items in data.groupby("batch_idx"):
@@ -59,12 +60,15 @@ class NaturalLanguageInferencePredict:
                 ):
                     prediction, _ = self.nli(embedding, participant)
                     alpha, beta = prediction
-                    prediction = alpha / (alpha + beta)
+                    pred_mean = alpha / (alpha + beta)
+                    pred_precision = alpha + beta
+                    all_pred_mean = torch.cat((all_pred_mean, pred_mean))
+                    all_pred_precision = torch.cat((all_pred_precision, pred_precision))
                 else:
-                    prediction, _ = self.nli(embedding, participant)
-                all_predictions = torch.cat((all_predictions, prediction))
+                    pred_mean, _ = self.nli(embedding, participant)
+                    all_pred_mean = torch.cat((all_pred_mean, pred_mean))
 
-            return all_predictions
+            return all_pred_mean, all_pred_precision
 
 
 # Unit predict
