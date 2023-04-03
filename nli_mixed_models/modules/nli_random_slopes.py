@@ -314,7 +314,7 @@ class UnitRandomSlopes(RandomSlopesModel):
         # squashing function.
         mean = self.squashing_function(predictions).squeeze(1)
 
-        if item and self.use_item_variance:
+        if self.use_item_variance and item is not None:
             nu_shift = self.nu_shift[item]
         else:
             nu_shift = self.nu_shift

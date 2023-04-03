@@ -244,7 +244,7 @@ class UnitRandomIntercepts(RandomInterceptsModel):
 
     def _link_function(self, fixed, random, participant, item):
 
-        if item and self.use_item_variance:
+        if self.use_item_variance and item is not None:
             nu_shift = self.nu_shift[item]
         else:
             nu_shift = self.nu_shift
