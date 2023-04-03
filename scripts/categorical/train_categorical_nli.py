@@ -39,6 +39,7 @@ def main(args):
             LOG.info("Loading MegaVeridicality data...")
             ver = load_veridicality()
             hyperparams["n_participants"] = ver.participant.unique().shape[0]
+            hyperparams["n_items"] = ver.item.unique().shape[0]
             LOG.info("...Complete.")
 
             # Log the device being used

@@ -18,7 +18,9 @@ class RandomSlopesModel(NaturalLanguageInference):
         hidden_dim: int,
         output_dim: int,
         n_participants: int,
+        n_items: int,
         setting: str,
+        use_item_variance: bool,
         use_sampling: bool,
         n_samples: int,
         device=torch.device("cpu"),
@@ -29,7 +31,9 @@ class RandomSlopesModel(NaturalLanguageInference):
             hidden_dim,
             output_dim,
             n_participants,
+            n_items,
             setting,
+            use_item_variance,
             use_sampling,
             n_samples,
             device,
@@ -144,7 +148,7 @@ class RandomSlopesModel(NaturalLanguageInference):
         return predictions
 
     def forward(
-        self, embeddings, participant=None
+        self, embeddings, participant=None, item=None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Do a forward pass on the model. Returns a tuple (prediction, random_loss), where
            random_loss is a loss associated with the prior over the random components
@@ -158,7 +162,7 @@ class RandomSlopesModel(NaturalLanguageInference):
             predictions = []
             for i in range(self.n_samples):
                 prediction_mlp = self._get_stacked_predictions(embeddings, participant)
-                predictions.append(self._link_function(prediction_mlp, participant))
+                predictions.append(self._link_function(prediction_mlp, participant, item))
             # If unit case, predictions will be (alpha, beta) tuples
             if all(isinstance(x, tuple) for x in predictions):
                 alpha = torch.stack([x[0] for x in predictions]).mean(0)
@@ -169,7 +173,7 @@ class RandomSlopesModel(NaturalLanguageInference):
         else:
             # Get predictions from MLPs and pass through link function
             prediction_mlp = self._get_stacked_predictions(embeddings, participant)
-            prediction = self._link_function(prediction_mlp, participant)
+            prediction = self._link_function(prediction_mlp, participant, item)
 
         return prediction, random_loss
 
@@ -182,7 +186,9 @@ class CategoricalRandomSlopes(RandomSlopesModel):
         hidden_dim: int,
         output_dim: int,
         n_participants: int,
+        n_items: int,
         setting: str,
+        use_item_variance: bool,
         use_sampling: bool,
         n_samples: int,
         device=torch.device("cpu"),
@@ -193,7 +199,9 @@ class CategoricalRandomSlopes(RandomSlopesModel):
             hidden_dim,
             output_dim,
             n_participants,
+            n_items,
             setting,
+            use_item_variance,
             use_sampling,
             n_samples,
             device,
@@ -218,7 +226,7 @@ class CategoricalRandomSlopes(RandomSlopesModel):
         self.random_effects = self._extract_random_slopes_params()
         return self.random_effects - self.random_effects.mean(0)[None, :]
 
-    def _link_function(self, predictions, participant):
+    def _link_function(self, predictions, participant, item):
         """Computes the link function for a given model configuration."""
 
         # 'predictions' contains the outputs from the individual annotator MLPs,
@@ -247,7 +255,9 @@ class UnitRandomSlopes(RandomSlopesModel):
         hidden_dim: int,
         output_dim: int,
         n_participants: int,
+        n_items: int,
         setting: str,
+        use_item_variance: bool,
         use_sampling: bool,
         n_samples: int,
         device=torch.device("cpu"),
@@ -258,7 +268,9 @@ class UnitRandomSlopes(RandomSlopesModel):
             hidden_dim,
             output_dim,
             n_participants,
+            n_items,
             setting,
+            use_item_variance,
             use_sampling,
             n_samples,
             device,
@@ -275,7 +287,10 @@ class UnitRandomSlopes(RandomSlopesModel):
         self._initialize_random_effects()
 
         # A fixed shift term for calculating nu when parametrizing the beta distribution
-        self.nu_shift = Parameter(torch.tensor([0.0]))
+        if self.use_item_variance:
+            self.nu_shift = Parameter(torch.zeros(self.n_items))
+        else:
+            self.nu_shift = Parameter(torch.tensor([0.0]))
 
     def _initialize_random_effects(self):
         # The random effects in the unit random slopes model consist not
@@ -293,11 +308,16 @@ class UnitRandomSlopes(RandomSlopesModel):
         self.weights -= self.weights.mean(0)[None, :]
         return self.weights, self.variance - self.variance.mean()
 
-    def _link_function(self, predictions, participant):
+    def _link_function(self, predictions, participant, item):
         # Same link function as for unit random intercepts, except that we
         # feed the outputs of the annotator-specific regression heads to the
         # squashing function.
         mean = self.squashing_function(predictions).squeeze(1)
+
+        if item and self.use_item_variance:
+            nu_shift = self.nu_shift[item]
+        else:
+            nu_shift = self.nu_shift
 
         # Mu and nu used to calculate the parameters for the beta distribution
         # Extended setting subtask (b): use mean variance across participants.
@@ -308,11 +328,11 @@ class UnitRandomSlopes(RandomSlopesModel):
             else:
                 random_variance = 0
             mu = mean
-            nu = torch.exp(self.nu_shift + random_variance)
+            nu = torch.exp(nu_shift + random_variance)
         # Extended setting subtask (a).
         else:
             mu = mean
-            nu = torch.exp(self.nu_shift + self.variance[participant])
+            nu = torch.exp(nu_shift + self.variance[participant])
 
         # Parameter estimates for the beta distribution. These are
         # estimated from the mean and variance.

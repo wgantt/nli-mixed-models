@@ -79,6 +79,8 @@ class NaturalLanguageInferenceEval:
                 else:
                     participant = None
 
+                item = torch.LongTensor(items.item.values).to(self.device)
+
                 # Get target values of appropriate type
                 if isinstance(self.nli, CategoricalRandomIntercepts) or isinstance(
                     self.nli, CategoricalRandomSlopes
@@ -102,12 +104,12 @@ class NaturalLanguageInferenceEval:
                 if isinstance(self.nli, UnitRandomIntercepts) or isinstance(
                     self.nli, UnitRandomSlopes
                 ):
-                    prediction, random_loss = self.nli(embedding, participant)
+                    prediction, random_loss = self.nli(embedding, participant, item)
                     alpha, beta = prediction
                     prediction = alpha / (alpha + beta)
                     fixed_loss = self.lossfunc(alpha, beta, target)
                 else:
-                    prediction, random_loss = self.nli(embedding, participant)
+                    prediction, random_loss = self.nli(embedding, participant, item)
                     fixed_loss = self.lossfunc(prediction, target)
                 all_predictions = torch.cat((all_predictions, prediction))
 

@@ -20,7 +20,9 @@ class RandomInterceptsModel(NaturalLanguageInference):
         hidden_dim: int,
         output_dim: int,
         n_participants: int,
+        n_items: int,
         setting: str,
+        use_item_variance: bool,
         use_sampling: bool,
         n_samples: int,
         device=torch.device("cpu"),
@@ -31,7 +33,9 @@ class RandomInterceptsModel(NaturalLanguageInference):
             hidden_dim,
             output_dim,
             n_participants,
+            n_items,
             setting,
+            use_item_variance,
             use_sampling,
             n_samples,
             device,
@@ -63,7 +67,7 @@ class RandomInterceptsModel(NaturalLanguageInference):
         return Sequential(*seq)
 
     def forward(
-        self, embeddings, participant=None
+        self, embeddings, participant=None, item=None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Do a forward pass on the model. Returns a tuple (prediction, random_loss), where
            random_loss is a loss associated with the prior over the random components.
@@ -76,7 +80,7 @@ class RandomInterceptsModel(NaturalLanguageInference):
         if self.setting == "standard":
             random = None
             random_loss = 0.0
-            prediction = self._link_function(fixed, random, participant)
+            prediction = self._link_function(fixed, random, participant, item)
             if isinstance(self, UnitRandomIntercepts):
                 alpha, beta = prediction
 
@@ -90,7 +94,7 @@ class RandomInterceptsModel(NaturalLanguageInference):
             if participant is None and self.use_sampling:
                 predictions = []
                 for i in range(self.n_samples):
-                    predictions.append(self._link_function(fixed, random, participant))
+                    predictions.append(self._link_function(fixed, random, participant, item))
                 # If unit case, predictions will be (alpha, beta) tuples
                 if all(isinstance(x, tuple) for x in predictions):
                     alpha = torch.stack([x[0] for x in predictions]).mean(0)
@@ -99,7 +103,7 @@ class RandomInterceptsModel(NaturalLanguageInference):
                 else:
                     prediction = torch.stack(predictions).mean(0)
             else:
-                prediction = self._link_function(fixed, random, participant)
+                prediction = self._link_function(fixed, random, participant, item)
 
         return prediction, random_loss
 
@@ -112,7 +116,9 @@ class CategoricalRandomIntercepts(RandomInterceptsModel):
         hidden_dim: int,
         output_dim: int,
         n_participants: int,
+        n_items: int,
         setting: str,
+        use_item_variance: bool,
         use_sampling: bool,
         n_samples: int,
         device=torch.device("cpu"),
@@ -123,7 +129,9 @@ class CategoricalRandomIntercepts(RandomInterceptsModel):
             hidden_dim,
             output_dim,
             n_participants,
+            n_items,
             setting,
+            use_item_variance,
             use_sampling,
             n_samples,
             device=device,
@@ -141,7 +149,7 @@ class CategoricalRandomIntercepts(RandomInterceptsModel):
         """Returns the mean-subtracted random effects of the model."""
         return self.random_effects - self.random_effects.mean(0)[None, :]
 
-    def _link_function(self, fixed, random, participant):
+    def _link_function(self, fixed, random, participant, item):
         """Computes the link function for a given model configuration."""
         # Standard setting: no annotators, so no random effects.
         if self.setting == "standard" or random is None:
@@ -186,7 +194,9 @@ class UnitRandomIntercepts(RandomInterceptsModel):
         hidden_dim: int,
         output_dim: int,
         n_participants: int,
+        n_items: int,
         setting: str,
+        use_item_variance: bool,
         use_sampling: bool,
         n_samples: int,
         device=torch.device("cpu"),
@@ -197,7 +207,9 @@ class UnitRandomIntercepts(RandomInterceptsModel):
             hidden_dim,
             output_dim,
             n_participants,
+            n_items,
             setting,
+            use_item_variance,
             use_sampling,
             n_samples,
             device=device,
@@ -207,7 +219,10 @@ class UnitRandomIntercepts(RandomInterceptsModel):
         self.squashing_function = sigmoid
 
         # A fixed shift term for calculating nu when parametrizing the beta distribution
-        self.nu_shift = Parameter(torch.tensor([0.0]))
+        if self.use_item_variance:
+            self.nu_shift = Parameter(torch.zeros(self.n_items))
+        else:
+            self.nu_shift = Parameter(torch.tensor([0.0]))
 
         # There are two random effects per annotator (shift and variance)
         self.mean = torch.zeros(2)
@@ -227,7 +242,13 @@ class UnitRandomIntercepts(RandomInterceptsModel):
     def _random_effects(self):
         return self.random_effects - self.random_effects.mean(0)[None, :]
 
-    def _link_function(self, fixed, random, participant):
+    def _link_function(self, fixed, random, participant, item):
+
+        if item and self.use_item_variance:
+            nu_shift = self.nu_shift[item]
+        else:
+            nu_shift = self.nu_shift
+
         # Standard setting: (text, hypothesis) --> label
         if self.setting == "standard" or random is None:
 
@@ -237,7 +258,7 @@ class UnitRandomIntercepts(RandomInterceptsModel):
 
             # Mu and nu used to calculate the parameters for the beta distribution
             mu = mean
-            nu = torch.exp(self.nu_shift)
+            nu = torch.exp(nu_shift)
 
         # Extended setting: (text, hypothesis, annotator) --> label.
         # Here, however, we handle the case where we lack annotator information
@@ -258,7 +279,7 @@ class UnitRandomIntercepts(RandomInterceptsModel):
 
             # Mu and nu used to calculate the parameters for the beta distribution
             mu = mean
-            nu = torch.exp(self.nu_shift + random_variance)
+            nu = torch.exp(nu_shift + random_variance)
 
         # Extended setting: (text, hypothesis, annotator) --> label
         else:
@@ -271,7 +292,7 @@ class UnitRandomIntercepts(RandomInterceptsModel):
 
             # Mu and nu used to calculate the parameters for the beta distribution
             mu = mean
-            nu = torch.exp(self.nu_shift + random_variance[participant])
+            nu = torch.exp(nu_shift + random_variance[participant])
 
         # Parameter estimates for the beta distribution. These are
         # estimated from the mean and precision.

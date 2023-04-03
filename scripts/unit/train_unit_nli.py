@@ -57,6 +57,7 @@ def main(args):
                 LOG.info("Loading MegaNegRaising data...")
                 data = load_neg_raising()
             hyperparams["n_participants"] = data.participant.unique().shape[0]
+            hyperparams["n_items"] = data.item.unique().shape[0]
             LOG.info("...Complete.")
 
             # Log the device being used

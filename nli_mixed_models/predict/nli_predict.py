@@ -51,6 +51,8 @@ class NaturalLanguageInferencePredict:
                 else:
                     participant = None
 
+                item = torch.LongTensor(items.item.values).to(self.device)
+
                 # Embed items
                 embedding = self.nli.embed(items)
 
@@ -58,14 +60,14 @@ class NaturalLanguageInferencePredict:
                 if isinstance(self.nli, UnitRandomIntercepts) or isinstance(
                     self.nli, UnitRandomSlopes
                 ):
-                    prediction, _ = self.nli(embedding, participant)
+                    prediction, _ = self.nli(embedding, participant, item)
                     alpha, beta = prediction
                     pred_mean = alpha / (alpha + beta)
                     pred_precision = alpha + beta
                     all_pred_mean = torch.cat((all_pred_mean, pred_mean))
                     all_pred_precision = torch.cat((all_pred_precision, pred_precision))
                 else:
-                    pred_mean, _ = self.nli(embedding, participant)
+                    pred_mean, _ = self.nli(embedding, participant, item)
                     all_pred_mean = torch.cat((all_pred_mean, pred_mean))
 
             return all_pred_mean, all_pred_precision

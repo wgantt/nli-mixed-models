@@ -29,10 +29,12 @@ class NaturalLanguageInferenceTrainer:
     def __init__(
         self,
         n_participants: int,
+        n_items: int,
         embedding_dim: int = 768,
         n_predictor_layers: int = 2,
         hidden_dim: int = 128,
         setting: str = "extended",
+        use_item_variance: bool = False,
         use_sampling: bool = False,
         n_samples: int = 100,
         device="cpu",
@@ -41,7 +43,9 @@ class NaturalLanguageInferenceTrainer:
         self.n_predictor_layers = n_predictor_layers
         self.hidden_dim = hidden_dim
         self.n_participants = n_participants
+        self.n_items = n_items
         self.setting = setting
+        self.use_item_variance = use_item_variance
         self.device = torch.device(device)
         self.nli = self.MODEL_CLASS(
             embedding_dim,
@@ -49,7 +53,9 @@ class NaturalLanguageInferenceTrainer:
             hidden_dim,
             self.OUTPUT_DIM,
             n_participants,
+            n_items,
             setting,
+            use_item_variance,
             use_sampling,
             n_samples,
             device,
@@ -113,6 +119,8 @@ class NaturalLanguageInferenceTrainer:
                 else:
                     participant = None
 
+                item = torch.LongTensor(items.item.values).to(self.device)
+
                 # Get targets, modal responses, and item embeddings
                 target = self.TARGET_TYPE(items.target.values).to(self.device)
                 modal_response = self.TARGET_TYPE(items.modal_response.values).to(
@@ -121,7 +129,7 @@ class NaturalLanguageInferenceTrainer:
                 embedding = self.nli.embed(items).to(self.device)
 
                 # Get model prediction and random loss (converting the latter as appropriate)
-                prediction, random_loss = self.nli(embedding, participant)
+                prediction, random_loss = self.nli(embedding, participant, item)
                 random_loss = (
                     random_loss
                     if isinstance(random_loss, float)

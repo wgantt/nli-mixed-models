@@ -18,7 +18,9 @@ class NaturalLanguageInference(Module):
         hidden_dim: int,
         output_dim: int,
         n_participants: int,
+        n_items: int,
         setting: str,
+        use_item_variance: bool,
         use_sampling: bool,
         n_samples: int,
         device=torch.device("cpu"),
@@ -32,13 +34,15 @@ class NaturalLanguageInference(Module):
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
         self.n_participants = n_participants
+        self.n_items = n_items
         self.setting = setting
+        self.use_item_variance = use_item_variance
         self.use_sampling = use_sampling
         self.n_samples = n_samples
         self.device = device
 
     def forward(
-        self, embeddings, participant=None
+        self, embeddings, participant=None, item=None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Abstract method to be overridden by subclasses."""
         prediction, random_loss = None, None

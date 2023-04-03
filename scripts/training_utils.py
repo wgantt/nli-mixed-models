@@ -160,6 +160,8 @@ def load_veridicality():
 	is necessary for the random effects component of the model.
 	"""
     df["participant"] = df.participant.astype("category").cat.codes
+    
+    df["item"] = (df.sentence+df.hypothesis).astype("category").cat.codes
 
     # Calculate accuracy of zero-rule classifier (i.e. predicting majority class)
     mode_prediction = torch.ones(df.target.shape) * mode(df.target)
@@ -236,6 +238,9 @@ def load_neg_raising():
     # Map participant numbers to contiguous integers
     neg["participant"] = neg.participant.astype("category").cat.codes
 
+    # Create indices for unique items
+    neg["item"] = (neg.sentence+neg.hypothesis).astype("category").cat.codes
+
     # The target values are just the neg-raising scores
     neg["target"] = neg.negraising
 
@@ -257,6 +262,9 @@ def load_unit_data(dataset):
 
     # Map participant numbers to contiguous integers
     data["participant"] = data.participant.astype("category").cat.codes
+
+    # Create indices for unique items
+    data["item"] = (data.sentence+data.hypothesis).astype("category").cat.codes
 
     # We will be use a binary cross entrop loss in the models, and the best
     # possible response for this loss is the mean
@@ -284,6 +292,9 @@ def load_difficulty(templatized=True):
 
     # Map participant numbers to contiguous integers
     diff["participant"] = diff.participant.astype("category").cat.codes
+
+    # Create indices for unique items
+    diff["item"] = (diff.sentence+diff.hypothesis).astype("category").cat.codes
 
     # The target values are just the difficulty scores
     diff["target"] = diff.response_difficulty
@@ -328,6 +339,9 @@ def load_intensionality(templatized=True):
 
     # Map participant numbers to contiguous integers
     mi["participant"] = mi.participant.astype("category").cat.codes
+
+    # Create indices for unique items
+    mi["item"] = (mi.sentence+mi.hypothesis).astype("category").cat.codes
 
     # The target values are just the difficulty scores
     mi["target"] = mi.response
