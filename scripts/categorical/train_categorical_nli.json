@@ -11,7 +11,7 @@
     "setting":["standard"],
     "use_sampling":[false],
     "n_samples":[100],
-    "train_bert_layers":0,
+    "train_bert_layers":[0],
     "device":["cuda:1"]
   },
   "training":{
