@@ -25,6 +25,7 @@ class RandomInterceptsModel(NaturalLanguageInference):
         use_item_variance: bool,
         use_sampling: bool,
         n_samples: int,
+        train_bert_layers: int,
         device=torch.device("cpu"),
     ):
         super().__init__(
@@ -38,6 +39,7 @@ class RandomInterceptsModel(NaturalLanguageInference):
             use_item_variance,
             use_sampling,
             n_samples,
+            train_bert_layers,
             device,
         )
 
@@ -121,6 +123,7 @@ class CategoricalRandomIntercepts(RandomInterceptsModel):
         use_item_variance: bool,
         use_sampling: bool,
         n_samples: int,
+        train_bert_layers: int,
         device=torch.device("cpu"),
     ):
         super().__init__(
@@ -134,6 +137,7 @@ class CategoricalRandomIntercepts(RandomInterceptsModel):
             use_item_variance,
             use_sampling,
             n_samples,
+            train_bert_layers,
             device=device,
         )
 
@@ -199,6 +203,7 @@ class UnitRandomIntercepts(RandomInterceptsModel):
         use_item_variance: bool,
         use_sampling: bool,
         n_samples: int,
+        train_bert_layers: int,
         device=torch.device("cpu"),
     ):
         super().__init__(
@@ -212,6 +217,7 @@ class UnitRandomIntercepts(RandomInterceptsModel):
             use_item_variance,
             use_sampling,
             n_samples,
+            train_bert_layers,
             device=device,
         )
 

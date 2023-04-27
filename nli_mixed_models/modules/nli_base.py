@@ -23,12 +23,11 @@ class NaturalLanguageInference(Module):
         use_item_variance: bool,
         use_sampling: bool,
         n_samples: int,
+        train_bert_layers: int,
         device=torch.device("cpu"),
     ):
         super().__init__()
 
-        self.roberta = torch.hub.load("pytorch/fairseq", "roberta.base")
-        self.roberta.eval()
         self.embedding_dim = embedding_dim
         self.n_predictor_layers = n_predictor_layers
         self.hidden_dim = hidden_dim
@@ -39,7 +38,20 @@ class NaturalLanguageInference(Module):
         self.use_item_variance = use_item_variance
         self.use_sampling = use_sampling
         self.n_samples = n_samples
+        self.train_bert_layers = train_bert_layers
         self.device = device
+
+        self.roberta = torch.hub.load("pytorch/fairseq", "roberta.base")
+        # Freeze all BERT layers
+        if self.train_bert_layers <= 0:
+            self.roberta.eval()
+        # Train last `train_bert_layers` BERT layers
+        else:
+            for param in self.roberta.embeddings.parameters():
+                param.requires_grad = False
+            for layer in self.roberta.encoder.layer[:-self.train_bert_layers]:
+                for param in layer.parameters():
+                    param.requires_grad = False
 
     def forward(
         self, embeddings, participant=None, item=None
@@ -52,11 +64,24 @@ class NaturalLanguageInference(Module):
         """Creates text+hypothesis embeddings for each item using RoBERTa."""
         texts, hypotheses = items.sentence.values, items.hypothesis.values
 
-        token_ids = collate_tokens(
-            [self.roberta.encode(t, h) for t, h in zip(texts, hypotheses)], pad_idx=1
-        )
+        # Freeze all BERT layers
+        if self.train_bert_layers <= 0:
 
-        with torch.no_grad():
+            token_ids = collate_tokens(
+                [self.roberta.encode(t, h) for t, h in zip(texts, hypotheses)], pad_idx=1
+            )
+
+            with torch.no_grad():
+                embedding = self.roberta.extract_features(token_ids)
+
+        # Train last `train_bert_layers` BERT layers
+        else:
+            token_ids = collate_tokens(
+                [self.roberta.encode(t, h) for t, h in zip(texts, hypotheses)], pad_idx=1
+            )
+
             embedding = self.roberta.extract_features(token_ids)
+
+            
 
         return embedding

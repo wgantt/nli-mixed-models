@@ -37,6 +37,7 @@ class NaturalLanguageInferenceTrainer:
         use_item_variance: bool = False,
         use_sampling: bool = False,
         n_samples: int = 100,
+        train_bert_layers: int = 0,
         device="cpu",
     ):
         self.embedding_dim = embedding_dim
@@ -58,6 +59,7 @@ class NaturalLanguageInferenceTrainer:
             use_item_variance,
             use_sampling,
             n_samples,
+            train_bert_layers,
             device,
         ).to(device)
         self.data_type = (

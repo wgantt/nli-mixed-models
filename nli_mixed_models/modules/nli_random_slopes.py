@@ -22,6 +22,7 @@ class RandomSlopesModel(NaturalLanguageInference):
         setting: str,
         use_item_variance: bool,
         use_sampling: bool,
+        train_bert_layers: int,
         n_samples: int,
         device=torch.device("cpu"),
     ):
@@ -35,6 +36,7 @@ class RandomSlopesModel(NaturalLanguageInference):
             setting,
             use_item_variance,
             use_sampling,
+            train_bert_layers,
             n_samples,
             device,
         )
@@ -191,6 +193,7 @@ class CategoricalRandomSlopes(RandomSlopesModel):
         use_item_variance: bool,
         use_sampling: bool,
         n_samples: int,
+        train_bert_layers: int,
         device=torch.device("cpu"),
     ):
         super().__init__(
@@ -204,6 +207,7 @@ class CategoricalRandomSlopes(RandomSlopesModel):
             use_item_variance,
             use_sampling,
             n_samples,
+            train_bert_layers,
             device,
         )
 
@@ -260,6 +264,7 @@ class UnitRandomSlopes(RandomSlopesModel):
         use_item_variance: bool,
         use_sampling: bool,
         n_samples: int,
+        train_bert_layers: int,
         device=torch.device("cpu"),
     ):
         super().__init__(
@@ -273,6 +278,7 @@ class UnitRandomSlopes(RandomSlopesModel):
             use_item_variance,
             use_sampling,
             n_samples,
+            train_bert_layers,
             device,
         )
 
