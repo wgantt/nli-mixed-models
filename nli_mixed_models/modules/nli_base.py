@@ -47,11 +47,11 @@ class NaturalLanguageInference(Module):
             self.roberta.eval()
         # Train last `train_bert_layers` BERT layers
         else:
-            for param in self.roberta.encoder.sentence_encoder.embed_tokens.parameters():
+            for param in self.roberta.model.encoder.sentence_encoder.embed_tokens.parameters():
                 param.requires_grad = False
-            for param in self.roberta.encoder.sentence_encoder.embed_positions.parameters():
+            for param in self.roberta.model.encoder.sentence_encoder.embed_positions.parameters():
                 param.requires_grad = False
-            for layer in self.roberta.encoder.sentence_encoder.layers[:-self.train_bert_layers]:
+            for layer in self.roberta.model.encoder.sentence_encoder.layers[:-self.train_bert_layers]:
                 for param in layer.parameters():
                     param.requires_grad = False
 
