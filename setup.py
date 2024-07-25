@@ -13,7 +13,7 @@ setup(
     install_requires=[
         "numpy==1.20.0",
         "pandas==1.0.5",
-        "torch==1.3.1",
+        "torch==2.2.0",
         "torchvision==0.4.*",
         "fairseq==0.9.*",
     ],
