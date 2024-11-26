@@ -11,7 +11,7 @@ setup(
     packages=find_packages(),
     package_dir={"nli_mixed_models": "nli_mixed_models"},
     install_requires=[
-        "numpy==1.20.0",
+        "numpy==1.22.0",
         "pandas==1.0.5",
         "torch==1.3.1",
         "torchvision==0.4.*",
